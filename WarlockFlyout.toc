@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: |cffcca3ffWarlock Flyout|r
-## Notes: One button for your warlock: left-click for every demon you can summon, right-click for Ritual of Summoning and healthstones. /wf for options.
-## Version: 1.0
+## Notes: One button for your warlock: left-click for every demon you can summon, right-click for Ritual of Summoning and your stones. /wf for options.
+## Version: 1.1
 ## Author: Ron
 ## X-License: MIT
 ## SavedVariables: WarlockFlyoutDB

@@ -5,7 +5,7 @@
 **One button for your warlock**, made for WoW: Forever.
 
 - **Left-click:** summon any demon you know. Shift-click casts Fel Domination first.
-- **Right-click:** Ritual of Summoning, Create Healthstone, and your best Healthstone.
+- **Right-click:** Ritual of Summoning, Create Healthstone, Create Soulstone and Create Firestone, always your best rank.
 
 Shows only spells you've learned, works in combat, and displays your soul shards.
 

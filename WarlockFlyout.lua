@@ -44,16 +44,15 @@ local NOT_DEMONS = { "steed", "^summon demon$" }
 
 local FEL_DOMINATION = { names = { "Fel Domination" }, id = 18708 }
 local RITUAL_OF_SUMMONING = { names = { "Ritual of Summoning" }, id = 698 }
-local RITUAL_OF_SOULS = { names = { "Ritual of Souls" }, id = 29893 }
-
-local HS_TIER = {
-    [5512] = 1, [19004] = 1, [19005] = 1,
-    [5511] = 2, [19006] = 2, [19007] = 2,
-    [5509] = 3, [19008] = 3, [19009] = 3,
-    [5510] = 4, [19010] = 4, [19011] = 4,
-    [9421] = 5, [19012] = 5, [19013] = 5,
-    [22103] = 6, [22104] = 6, [22105] = 6,
+local CREATE_STONES = {
+    { prefix = "^create healthstone", name = "Create Healthstone", hint = "Click: make a healthstone",
+      ids = { 27230, 11730, 11729, 5699, 6202, 6201 } },
+    { prefix = "^create soulstone", name = "Create Soulstone", hint = "Click: make a soulstone",
+      ids = { 27238, 20757, 20756, 20755, 20752, 693 } },
+    { prefix = "^create firestone", name = "Create Firestone", hint = "Click: make a firestone",
+      ids = { 27250, 17953, 17952, 17951, 6366 } },
 }
+
 local NAME_TIER = { { "master", 6 }, { "major", 5 }, { "greater", 4 }, { "lesser", 2 }, { "minor", 1 } }
 local function TierOfName(lower)
     for _, nt in ipairs(NAME_TIER) do
@@ -155,33 +154,6 @@ local function ItemCount(id)
     return tonumber(Readable(n)) or 0
 end
 
-local function ItemIcon(id)
-    if C_Item and C_Item.GetItemIconByID then
-        local ok, t = pcall(C_Item.GetItemIconByID, id)
-        if ok and t then return t end
-    end
-    if GetItemIcon then
-        local ok, t = pcall(GetItemIcon, id)
-        if ok and t then return t end
-    end
-    return "Interface\\Icons\\INV_Stone_04"
-end
-
-local function ItemName(id)
-    local n
-    if C_Item and C_Item.GetItemNameByID then
-        local ok, x = pcall(C_Item.GetItemNameByID, id); n = ok and x
-    end
-    if not n and C_Item and C_Item.GetItemInfo then
-        local ok, x = pcall(C_Item.GetItemInfo, id); n = ok and x
-    end
-    if not n and GetItemInfo then
-        local ok, x = pcall(GetItemInfo, id); n = ok and x
-    end
-    n = Readable(n)
-    return type(n) == "string" and n or nil
-end
-
 local book, bookList = {}, {}
 
 local function ScanBook()
@@ -260,11 +232,11 @@ local function Find(def)
     end
 end
 
-local function FindCreateHealthstone()
+local function FindBestRank(def)
     local best, bestTier
     for _, e in ipairs(bookList) do
         local lower = e.name:lower()
-        if lower:find("^create healthstone") then
+        if lower:find(def.prefix) then
             local tier = TierOfName(lower)
             if not best or tier > bestTier or (tier == bestTier and (e.slot or 0) > (best.slot or 0)) then
                 best, bestTier = e, tier
@@ -272,42 +244,9 @@ local function FindCreateHealthstone()
         end
     end
     if best then return best end
-    for _, id in ipairs({ 27230, 11730, 11729, 5699, 6202, 6201 }) do
-        if #bookList == 0 and KnownID(id) then return { name = SpellName(id) or "Create Healthstone", id = id } end
+    for _, id in ipairs(def.ids) do
+        if #bookList == 0 and KnownID(id) then return { name = SpellName(id) or def.name, id = id } end
     end
-end
-
-local function BagSlots(bag)
-    local fn = (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots
-    if not fn then return 0 end
-    local ok, n = pcall(fn, bag)
-    return ok and tonumber(Readable(n)) or 0
-end
-
-local function BagItem(bag, slot)
-    local fn = (C_Container and C_Container.GetContainerItemID) or GetContainerItemID
-    if not fn then return nil end
-    local ok, id = pcall(fn, bag, slot)
-    return ok and Readable(id) or nil
-end
-
-local function BestHealthstone()
-    local bestID, bestTier
-    local last = (NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4)
-    for bag = 0, last do
-        for slot = 1, BagSlots(bag) do
-            local id = BagItem(bag, slot)
-            if id then
-                local tier = HS_TIER[id]
-                if not tier then
-                    local n = ItemName(id)
-                    if n and n:lower():find("healthstone", 1, true) then tier = TierOfName(n:lower()) end
-                end
-                if tier and (not bestTier or tier > bestTier) then bestID, bestTier = id, tier end
-            end
-        end
-    end
-    return bestID
 end
 
 local main = CreateFrame("Button", "WarlockFlyoutButton", UIParent, "SecureHandlerClickTemplate")
@@ -391,9 +330,7 @@ main:SetAttribute("_onclick", [=[
 local function ButtonTooltip(b)
     GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
     local drawn = false
-    if b.item and GameTooltip.SetItemByID then
-        drawn = pcall(GameTooltip.SetItemByID, GameTooltip, b.item)
-    elseif b.spellID and GameTooltip.SetSpellByID then
+    if b.spellID and GameTooltip.SetSpellByID then
         drawn = pcall(GameTooltip.SetSpellByID, GameTooltip, b.spellID)
     end
     if not drawn or GameTooltip:NumLines() == 0 then GameTooltip:AddLine(b.label or "?") end
@@ -416,8 +353,6 @@ local function FlyoutButton(f, i)
 
     pcall(b.cooldown.SetSwipeTexture, b.cooldown, MEDIA .. "hex_mask")
     pcall(b.cooldown.SetDrawEdge, b.cooldown, false)
-    b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-    b.count:SetPoint("BOTTOMRIGHT", 1, 0)
 
     local pushed = b:CreateTexture(nil, "OVERLAY")
     pushed:SetAllPoints()
@@ -436,9 +371,8 @@ local function FlyoutButton(f, i)
 end
 
 local function ClearButton(b)
-    for _, k in ipairs({ "type", "spell", "item", "shift-type1", "shift-macrotext1" }) do b:SetAttribute(k, nil) end
-    b.spellID, b.item, b.label, b.hint, b.free = nil, nil, nil, nil, nil
-    b.count:SetText("")
+    for _, k in ipairs({ "type", "spell", "shift-type1", "shift-macrotext1" }) do b:SetAttribute(k, nil) end
+    b.spellID, b.label, b.hint, b.free = nil, nil, nil, nil
     b:Hide()
 end
 
@@ -521,19 +455,9 @@ local function Rebuild()
     n = 0
     local s = Find(RITUAL_OF_SUMMONING)
     if s then n = n + 1 SpellButton(utils, n, s, "Click: summon your target (needs two helpers)") end
-    s = Find(RITUAL_OF_SOULS)
-    if s then n = n + 1 SpellButton(utils, n, s, "Click: a soulwell for your group") end
-    s = FindCreateHealthstone()
-    if s then n = n + 1 SpellButton(utils, n, s, "Click: make a healthstone") end
-    local stone = BestHealthstone()
-    if stone then
-        n = n + 1
-        local b = FlyoutButton(utils, n)
-        ClearButton(b)
-        b:SetAttribute("type", "item")
-        b:SetAttribute("item", "item:" .. stone)
-        b.item, b.label, b.hint = stone, ItemName(stone) or "Healthstone", "Click: use it"
-        b.icon:SetTexture(ItemIcon(stone))
+    for _, def in ipairs(CREATE_STONES) do
+        s = FindBestRank(def)
+        if s then n = n + 1 SpellButton(utils, n, s, def.hint) end
     end
     Layout(utils, n)
 end
@@ -545,20 +469,13 @@ local function Refresh()
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do
             if b:IsShown() then
-                if b.item then
-                    local c = ItemCount(b.item)
-                    b.count:SetText(c > 1 and c or "")
-                    b.icon:SetDesaturated(c == 0)
-                    b.cooldown:Clear()
+                local start, dur = SpellCooldown(b.spellID)
+                if start and dur and dur > 1.5 then
+                    b.cooldown:SetCooldown(start, dur)
                 else
-                    local start, dur = SpellCooldown(b.spellID)
-                    if start and dur and dur > 1.5 then
-                        b.cooldown:SetCooldown(start, dur)
-                    else
-                        b.cooldown:Clear()
-                    end
-                    b.icon:SetDesaturated(not b.free and shards == 0)
+                    b.cooldown:Clear()
                 end
+                b.icon:SetDesaturated(not b.free and shards == 0)
             end
         end
     end
@@ -593,7 +510,7 @@ main:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:AddLine("Warlock Flyout", ACCENT[1], ACCENT[2], ACCENT[3])
     GameTooltip:AddLine("Left-click: your demons", 1, 1, 1)
-    GameTooltip:AddLine("Right-click: summoning and healthstones", 1, 1, 1)
+    GameTooltip:AddLine("Right-click: summoning and stones", 1, 1, 1)
     if not db.locked then GameTooltip:AddLine("Shift-drag: move", 0.6, 0.6, 0.6) end
     GameTooltip:AddLine(("Soul shards: %d"):format(ItemCount(SOUL_SHARD)), 0.8, 0.6, 1)
     GameTooltip:AddLine("/wf config: settings", 0.6, 0.6, 0.6)
@@ -690,7 +607,7 @@ local function BuildConfig()
     sub:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
     sub:SetJustifyH("LEFT")
     sub:SetWordWrap(true)
-    sub:SetText("Left-click: demons. Right-click: summoning and healthstones.")
+    sub:SetText("Left-click: demons. Right-click: summoning and stones.")
 
     local rule = f:CreateTexture(nil, "BORDER")
     rule:SetHeight(1)
@@ -847,8 +764,7 @@ end
 local events = CreateFrame("Frame")
 
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB",
-                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED",
-                     "GET_ITEM_INFO_RECEIVED" }) do
+                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED" }) do
     pcall(events.RegisterEvent, events, e)
 end
 
@@ -923,7 +839,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
         if pending then ApplyLayout() end
-    elseif event == "SPELL_UPDATE_COOLDOWN" then
+    elseif event == "SPELL_UPDATE_COOLDOWN" or event == "BAG_UPDATE_DELAYED" then
 
     else
         QueueRebuild()
