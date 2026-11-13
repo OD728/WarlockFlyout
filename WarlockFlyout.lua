@@ -36,8 +36,10 @@ local DEMONS = {
     { names = { "Summon Incubus" }, id = 713 },
     { names = { "Summon Felhunter", "Summon Fel Hunter" }, id = 691 },
     { names = { "Summon Felguard" }, id = 30146 },
-    { names = { "Summon Infernal", "Inferno" }, id = 1122 },
-    { names = { "Summon Doomguard", "Ritual of Doom" }, id = 18540 },
+    { names = { "Summon Infernal", "Inferno" }, id = 1122, reagent = 5565, noFelDom = true,
+      hint = "Click: drop an Infernal on the target area (needs an Infernal Stone, outdoors only)" },
+    { names = { "Summon Doomguard", "Ritual of Doom" }, id = 18540, reagent = 16583, noFelDom = true,
+      hint = "Click: start the ritual (needs a Demonic Figurine and 4 party members)" },
 }
 
 local NOT_DEMONS = { "steed", "^summon demon$" }
@@ -49,6 +51,8 @@ local CREATE_STONES = {
       ids = { 27230, 11730, 11729, 5699, 6202, 6201 } },
     { prefix = "^create soulstone", name = "Create Soulstone", hint = "Click: make a soulstone",
       ids = { 27238, 20757, 20756, 20755, 20752, 693 } },
+    { prefix = "^create spellstone", name = "Create Spellstone", hint = "Click: make a spellstone",
+      ids = { 28172, 17728, 17727, 2362 } },
     { prefix = "^create firestone", name = "Create Firestone", hint = "Click: make a firestone",
       ids = { 27250, 17953, 17952, 17951, 6366 } },
 }
@@ -372,7 +376,7 @@ end
 
 local function ClearButton(b)
     for _, k in ipairs({ "type", "spell", "shift-type1", "shift-macrotext1" }) do b:SetAttribute(k, nil) end
-    b.spellID, b.label, b.hint, b.free = nil, nil, nil, nil
+    b.spellID, b.label, b.hint, b.free, b.reagent = nil, nil, nil, nil, nil
     b:Hide()
 end
 
@@ -431,13 +435,14 @@ local function Rebuild()
 
     local n, used = 0, {}
     local felDom = Find(FEL_DOMINATION)
-    local function addDemon(spell, free)
+    local function addDemon(spell, def)
+        def = def or {}
         if used[spell.name:lower()] then return end
         used[spell.name:lower()] = true
         n = n + 1
-        local b = SpellButton(demons, n, spell, "Click: summon")
-        b.free = free
-        if felDom then
+        local b = SpellButton(demons, n, spell, def.hint or "Click: summon")
+        b.free, b.reagent = def.free, def.reagent
+        if felDom and not def.noFelDom then
             b:SetAttribute("shift-type1", "macro")
             b:SetAttribute("shift-macrotext1", "/cast " .. felDom.name .. "\n/cast " .. spell.name)
             b.hint = b.hint .. "\nShift-click: " .. felDom.name .. " first"
@@ -445,7 +450,7 @@ local function Rebuild()
     end
     for _, def in ipairs(DEMONS) do
         local s = Find(def)
-        if s then addDemon(s, def.free) end
+        if s then addDemon(s, def) end
     end
     for _, e in ipairs(bookList) do
         if IsDemonName(e.name:lower()) then addDemon(e) end
@@ -475,7 +480,11 @@ local function Refresh()
                 else
                     b.cooldown:Clear()
                 end
-                b.icon:SetDesaturated(not b.free and shards == 0)
+                if b.reagent then
+                    b.icon:SetDesaturated(ItemCount(b.reagent) == 0)
+                else
+                    b.icon:SetDesaturated(not b.free and shards == 0)
+                end
             end
         end
     end
@@ -752,7 +761,7 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
         Print("/wf config - the settings window")
         Print("/wf lock, /wf unlock - stop or allow moving the button" ..
             (Addon.bareLock and " (also just /lock and /unlock)" or ""))
-        Print("/wf dir up|down|left|right - where the flyouts open")
+        Print("/wf dir up||down||left||right - where the flyouts open")
         Print("/wf scale 0.5-2 - button size")
         Print("/wf show | hide - show or hide the button")
         Print("/wf reset - back to the middle of the screen")

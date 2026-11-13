@@ -5,7 +5,7 @@
 **One button for your warlock**, made for WoW: Forever.
 
 - **Left-click:** summon any demon you know. Shift-click casts Fel Domination first.
-- **Right-click:** Ritual of Summoning, Create Healthstone, Create Soulstone and Create Firestone, always your best rank.
+- **Right-click:** Ritual of Summoning, Create Healthstone, Create Soulstone, Create Firestone and Create Spellstone, always your best rank.
 
 Shows only spells you've learned, works in combat, and displays your soul shards.
 
@@ -28,6 +28,10 @@ Download it from CurseForge, or copy this repository's files into a folder named
 | `/wf spells` | What the flyouts found in your spellbook |
 
 Shift-drag the button to move it while it's unlocked.
+
+## Changes
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
