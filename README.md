@@ -9,6 +9,8 @@
 
 Shows only spells you've learned, works in combat, and displays your soul shards.
 
+![The demon flyout in game](art/screenshot.png)
+
 ## Install
 
 Download it from CurseForge, or copy this repository's files into a folder named
