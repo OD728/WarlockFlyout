@@ -237,6 +237,21 @@ local function Find(def)
 end
 
 local function FindBestRank(def)
+    -- By spell ID first (best rank first): works in every client language.
+    local inBook = {}
+    for _, e in ipairs(bookList) do
+        if e.id then inBook[e.id] = e end
+    end
+    for _, id in ipairs(def.ids) do
+        if inBook[id] then return inBook[id] end
+        if KnownID(id) then
+            local n = SpellName(id)
+            local e = n and book[n:lower()]
+            return { name = (e and e.name) or n or def.name, id = id }
+        end
+    end
+
+    -- Fallback for IDs this list doesn't know: match the English name.
     local best, bestTier
     for _, e in ipairs(bookList) do
         local lower = e.name:lower()
@@ -247,10 +262,7 @@ local function FindBestRank(def)
             end
         end
     end
-    if best then return best end
-    for _, id in ipairs(def.ids) do
-        if #bookList == 0 and KnownID(id) then return { name = SpellName(id) or def.name, id = id } end
-    end
+    return best
 end
 
 local main = CreateFrame("Button", "WarlockFlyoutButton", UIParent, "SecureHandlerClickTemplate")

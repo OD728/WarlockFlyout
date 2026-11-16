@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3
+
+### Fixed
+- Create Healthstone, Soulstone, Spellstone and Firestone now show up on non-English clients, such as German. They are found by spell ID instead of by English name, and the best rank you know is always used.
+
 ## 1.2
 
 ### New
