@@ -11,6 +11,44 @@ local EDGE = { 0.46, 0.25, 0.72 }
 local FILL = { 0.06, 0.03, 0.11 }
 local GLOW = { 0.80, 0.55, 1.00 }
 
+-- Text for the newer settings, in English and German.
+local L = {
+    border = "Border color: %s", picture = "Button picture: %s",
+    cycleHint = "Click: next. Right-click: previous.",
+    soulBag = "Soul bag: %d of %d slots full",
+    purple = "Purple", fel = "Fel green", ice = "Ice blue", fire = "Fire", blood = "Blood red",
+    gold = "Gold", silver = "Silver", pink = "Pink", black = "Black", class = "Class color",
+    pentagram = "Pentagram", shard = "Soul Shard",
+    knowledge = "Demonic Knowledge", pact = "Demonic Pact", incinerate = "Incinerate", shadowflame = "Shadow and Flame",
+}
+if GetLocale and GetLocale() == "deDE" then
+    L.border, L.picture = "Rahmenfarbe: %s", "Button-Bild: %s"
+    L.cycleHint = "Klick: nächste. Rechtsklick: vorherige."
+    L.soulBag = "Seelentasche: %d von %d Plätzen belegt"
+    L.purple, L.fel, L.ice, L.fire, L.blood = "Violett", "Teufelsgrün", "Eisblau", "Feuer", "Blutrot"
+    L.gold, L.silver, L.pink, L.black, L.class = "Gold", "Silber", "Pink", "Schwarz", "Klassenfarbe"
+    L.pentagram, L.shard = "Pentagramm", "Seelensplitter"
+    L.knowledge, L.pact, L.incinerate, L.shadowflame = "Dämonisches Wissen", "Dämonischer Pakt", "Verbrennen", "Schatten und Flamme"
+end
+
+-- Border colors: they tint the grey hex rings (purple reproduces the original art).
+local BORDER_LIST = { "purple", "fel", "ice", "fire", "blood", "gold", "silver", "pink", "black", "class" }
+local BORDER_COLORS = {
+    purple = { 0.635, 0.345, 1.00 }, fel = { 0.45, 1.00, 0.25 }, ice = { 0.35, 0.75, 1.00 },
+    fire = { 1.00, 0.45, 0.15 }, blood = { 1.00, 0.18, 0.25 }, gold = { 1.00, 0.80, 0.30 },
+    silver = { 0.85, 0.85, 0.90 }, pink = { 1.00, 0.35, 0.80 }, black = { 0.08, 0.08, 0.09 },
+}
+
+-- Button pictures: the original art, or a game icon (by spell or item ID, so names
+-- come out in the client's language). Talents from later expansions have no spell
+-- on Forever, so they use the icon file directly; any the client lacks are skipped.
+local PICTURE_LIST = { "pentagram", "shard", 688, 697, 712, 691, 1122, 18540, 686, 172, 5740, 6789, 6229,
+    "knowledge", "pact", "incinerate", "shadowflame" }
+local PICTURE_ICONS = {
+    knowledge = "spell_shadow_improvedvampiricembrace", pact = "spell_shadow_demonicpact",
+    incinerate = "spell_fire_burnout", shadowflame = "spell_shadow_shadowandflame",
+}
+
 local function Panel(f, alpha)
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
@@ -27,7 +65,7 @@ local function Panel(f, alpha)
     return edges
 end
 
-local DEFAULTS = { locked = false, scale = 1, dir = "up", shown = true }
+local DEFAULTS = { locked = false, scale = 1, dir = "up", shown = true, border = "purple", picture = "pentagram" }
 
 local DEMONS = {
     { names = { "Summon Imp" }, id = 688, free = true },
@@ -284,36 +322,125 @@ local function HexMask(owner, tex)
     end)
 end
 
-local function HexFace(b, frameArt, glowColor)
+local function BorderColor()
+    if db.border == "class" then
+        local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS.WARLOCK
+        if c and c.r then
+            local m = math.max(c.r, c.g, c.b, 0.01)
+            return { c.r / m, c.g / m, c.b / m }
+        end
+    end
+    return BORDER_COLORS[db.border] or BORDER_COLORS.purple
+end
+
+-- The hover glow: the border color, lighter. Purple keeps its original glow.
+local function GlowColor()
+    if db.border == "purple" or not db.border then return GLOW end
+    local c = BorderColor()
+    return { c[1] + (1 - c[1]) * 0.35, c[2] + (1 - c[2]) * 0.35, c[3] + (1 - c[3]) * 0.35 }
+end
+
+local function TintFace(b)
+    local c, g = BorderColor(), GlowColor()
+    b.frameArt:SetVertexColor(c[1], c[2], c[3])
+    b.glow:SetVertexColor(g[1], g[2], g[3])
+end
+
+local function PictureTexture(p)
+    if p == "shard" then
+        for _, fn in ipairs({ C_Item and C_Item.GetItemIconByID or false, GetItemIcon or false }) do
+            if type(fn) == "function" then
+                local ok, t = pcall(fn, SOUL_SHARD)
+                if ok and t then return t end
+            end
+        end
+        return "Interface\\Icons\\INV_Misc_Gem_Amethyst_02"
+    elseif type(p) == "number" then
+        return SpellIcon(p)
+    elseif PICTURE_ICONS[p] then
+        return "Interface\\Icons\\" .. PICTURE_ICONS[p]
+    end
+    return MEDIA .. "button"
+end
+
+-- Can this client show the picture? Unknown spells or missing icon files are skipped.
+local probe
+local function PictureAvailable(p)
+    if type(p) == "number" then
+        for _, fn in ipairs({ C_Spell and C_Spell.GetSpellTexture or false, GetSpellTexture or false }) do
+            if type(fn) == "function" then
+                local ok, t = pcall(fn, p)
+                return ok and t ~= nil
+            end
+        end
+        return true
+    elseif PICTURE_ICONS[p] then
+        local path = "Interface\\Icons\\" .. PICTURE_ICONS[p]
+        local checked = false
+        if type(GetFileIDFromPath) == "function" then
+            checked = true
+            for _, v in ipairs({ path, path .. ".blp" }) do
+                local ok, id = pcall(GetFileIDFromPath, v)
+                if ok and id then return true end
+            end
+        end
+        probe = probe or UIParent:CreateTexture(nil, "BACKGROUND")
+        if probe.GetTextureFileID then
+            checked = true
+            probe:SetTexture(nil)
+            probe:SetTexture(path)
+            local ok, id = pcall(probe.GetTextureFileID, probe)
+            if ok and id then return true end
+        end
+        return not checked
+    end
+    return true
+end
+
+local function PictureName(p)
+    if p == "shard" then return L.shard end
+    if PICTURE_ICONS[p] then return L[p] end
+    if type(p) == "number" then return SpellName(p) or ("#" .. p) end
+    return L.pentagram
+end
+
+local function HexFace(b, frameArt)
     b.icon = b:CreateTexture(nil, "ARTWORK")
     b.icon:SetAllPoints()
     HexMask(b, b.icon)
     b.frameArt = b:CreateTexture(nil, "OVERLAY")
     b.frameArt:SetAllPoints()
     b.frameArt:SetTexture(MEDIA .. frameArt)
-    local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetTexture(MEDIA .. "hex_glow")
-    hl:SetVertexColor(glowColor[1], glowColor[2], glowColor[3])
-    hl:SetBlendMode("ADD")
-    hl:SetAlpha(0.45)
+    b.glow = b:CreateTexture(nil, "HIGHLIGHT")
+    b.glow:SetAllPoints()
+    b.glow:SetTexture(MEDIA .. "hex_glow")
+    b.glow:SetBlendMode("ADD")
+    b.glow:SetAlpha(0.45)
+    TintFace(b)
 end
 
-HexFace(main, "hex_ring", GLOW)
+HexFace(main, "hex_ring")
 main.icon:SetTexture(MEDIA .. "button")
 
+-- Shard count: a small Soul Shard (the game's item icon in a mini hexagon with the
+-- same border as the flyout buttons), the number on top.
 main.badge = CreateFrame("Frame", nil, main)
-main.badge:SetSize(20, 20)
+main.badge:SetSize(22, 22)
 main.badge:SetPoint("CENTER", main, "BOTTOMRIGHT", -5, 6)
 main.badge:SetFrameLevel(main:GetFrameLevel() + 3)
-local badgeTex = main.badge:CreateTexture(nil, "ARTWORK")
-badgeTex:SetAllPoints()
-badgeTex:SetTexture(MEDIA .. "badge")
+HexFace(main.badge, "hex_border")
+main.badge.icon:SetTexture(PictureTexture("shard"))
+main.badge.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+main.badge.icon:SetVertexColor(0.6, 0.6, 0.6)   -- a bit darker, so the white number stands out
 main.count = main.badge:CreateFontString(nil, "OVERLAY")
-main.count:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
--- The font's digits sit a little left of their own width, so nudge the
--- count right to look centered in the round badge (one digit or two).
-main.count:SetPoint("CENTER", 1.5, 0)
+main.count:SetDrawLayer("OVERLAY", 7)
+-- The game's number font (as on action bar stack counts): its digits are centered
+-- in their own width, so the number needs no nudge.
+local numberFont = NumberFontNormal and NumberFontNormal:GetFont()
+main.count:SetFont(numberFont or "Fonts\\ARIALN.TTF", 11, "OUTLINE")
+main.count:SetAllPoints(main.badge)
+main.count:SetJustifyH("CENTER")
+main.count:SetJustifyV("MIDDLE")
 main.count:SetTextColor(1, 1, 1)
 
 local function NewFlyout(name)
@@ -364,7 +491,7 @@ local function FlyoutButton(f, i)
 
     b:RegisterForClicks("AnyUp", "AnyDown")
     b:SetAttribute("useOnKeyDown", false)
-    HexFace(b, "hex_border", GLOW)
+    HexFace(b, "hex_border")
     b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     b.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
     b.cooldown:SetAllPoints()
@@ -392,6 +519,34 @@ local function ClearButton(b)
     for _, k in ipairs({ "type", "spell", "shift-type1", "shift-macrotext1" }) do b:SetAttribute(k, nil) end
     b.spellID, b.label, b.hint, b.free, b.reagent = nil, nil, nil, nil, nil
     b:Hide()
+end
+
+-- Border color and button picture, from the settings.
+local function ApplyLook()
+    TintFace(main)
+    TintFace(main.badge)
+    for _, f in ipairs({ demons, utils }) do
+        for _, b in ipairs(f.buttons) do TintFace(b) end
+    end
+    main.icon:SetTexture(PictureTexture(db.picture))
+    if db.picture == "pentagram" then
+        main.icon:SetTexCoord(0, 1, 0, 1)
+    else
+        main.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)   -- cut off the game icon's own edge
+    end
+end
+
+-- Step through a list: dir 1 = next, -1 = previous. Entries `usable` rejects are skipped.
+local function Cycle(list, current, dir, usable)
+    local n, at = #list, 0
+    for i, v in ipairs(list) do
+        if v == current then at = i end
+    end
+    for _ = 1, n do
+        at = (at - 1 + dir) % n + 1
+        if not usable or usable(list[at]) then return list[at] end
+    end
+    return list[1]
 end
 
 local function Layout(f, n)
@@ -481,6 +636,57 @@ local function Rebuild()
     Layout(utils, n)
 end
 
+-- Soul bags: shards in them and their slots in total. 0, 0 when you carry none.
+local SOUL_BAG_FAMILY = 4
+-- Warlock soul bags on Forever (Wowhead's list), for when the client doesn't
+-- report the bag family: Soul Pouch, Small Soul Pouch, Felcloth Bag,
+-- Felblood Soul Bag, Box of Souls, Core Felcloth Bag.
+local SOUL_BAG_IDS = { [21340] = true, [22243] = true, [21341] = true, [279271] = true, [22244] = true, [21342] = true }
+
+local function BagItemID(bag)
+    local toInv = (C_Container and C_Container.ContainerIDToInventoryID) or ContainerIDToInventoryID
+    if not toInv or not GetInventoryItemID then return nil end
+    local okI, inv = pcall(toInv, bag)
+    if not okI or not inv then return nil end
+    local okD, id = pcall(GetInventoryItemID, "player", inv)
+    return okD and tonumber(Readable(id)) or nil
+end
+
+local function SoulBag()
+    local C = C_Container
+    local numSlots = (C and C.GetContainerNumSlots) or GetContainerNumSlots
+    local numFree = (C and C.GetContainerNumFreeSlots) or GetContainerNumFreeSlots
+    if not numSlots or not numFree then return 0, 0 end
+    local used, total = 0, 0
+    -- Bags 1-4 plus the extra equipped bag slot: on Forever the soul bag is bag 5
+    -- (checked in game: 16 slots, family 4). Bank bags come after it, so stop at 5.
+    local last = (NUM_BAG_SLOTS or 4) + 1
+    for bag = 1, last do
+        local okF, free, family = pcall(numFree, bag)
+        free, family = okF and tonumber(Readable(free)), okF and tonumber(Readable(family))
+        local isSoul = family and bit and bit.band and bit.band(family, SOUL_BAG_FAMILY) ~= 0
+        if not isSoul then isSoul = SOUL_BAG_IDS[BagItemID(bag) or 0] end
+        if isSoul then
+            local okS, slots = pcall(numSlots, bag)
+            slots = okS and tonumber(Readable(slots)) or 0
+            if slots > 0 then
+                total = total + slots
+                -- Count the shards themselves; fall back to used slots if items can't be read.
+                local itemAt = C and C.GetContainerItemID
+                if itemAt then
+                    for slot = 1, slots do
+                        local okA, id = pcall(itemAt, bag, slot)
+                        if okA and tonumber(Readable(id)) == SOUL_SHARD then used = used + 1 end
+                    end
+                else
+                    used = used + (slots - (free or slots))
+                end
+            end
+        end
+    end
+    return used, total
+end
+
 local function Refresh()
     local shards = ItemCount(SOUL_SHARD)
     main.count:SetText(shards)
@@ -536,6 +742,8 @@ main:SetScript("OnEnter", function(self)
     GameTooltip:AddLine("Right-click: summoning and stones", 1, 1, 1)
     if not db.locked then GameTooltip:AddLine("Shift-drag: move", 0.6, 0.6, 0.6) end
     GameTooltip:AddLine(("Soul shards: %d"):format(ItemCount(SOUL_SHARD)), 0.8, 0.6, 1)
+    local used, total = SoulBag()
+    if total > 0 then GameTooltip:AddLine(L.soulBag:format(used, total), 0.8, 0.6, 1) end
     GameTooltip:AddLine("/wf config: settings", 0.6, 0.6, 0.6)
     GameTooltip:Show()
 end)
@@ -659,12 +867,36 @@ local function BuildConfig()
     end)
     w[3] = dir
 
+    -- Border color and button picture: click for the next, right-click for the previous.
+    local function CycleButton(anchor, label, list, key, nameOf, usable)
+        local b = PanelButton(f, "")
+        b:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -6)
+        b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        b.Refresh = function() b:SetText(label:format(nameOf(db[key]))) end
+        b:SetScript("OnClick", function(_, button)
+            db[key] = Cycle(list, db[key], button == "RightButton" and -1 or 1, usable)
+            ApplyLook()
+            b.Refresh()
+        end)
+        b:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(L.cycleHint, 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", GameTooltip_Hide)
+        return b
+    end
+    local color = CycleButton(dir, L.border, BORDER_LIST, "border", function(k) return L[k] or k end)
+    local picture = CycleButton(color, L.picture, PICTURE_LIST, "picture", PictureName, PictureAvailable)
+    w[#w + 1] = color
+    w[#w + 1] = picture
+
     local scaleText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleText:SetPoint("TOPLEFT", dir, "BOTTOMLEFT", 0, -16)
+    scaleText:SetPoint("TOPLEFT", picture, "BOTTOMLEFT", 0, -16)
     local plus = PanelButton(f, "+", 26)
     local minus = PanelButton(f, "-", 26)
     plus:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
-    plus:SetPoint("TOP", dir, "BOTTOM", 0, -10)
+    plus:SetPoint("TOP", picture, "BOTTOM", 0, -10)
     minus:SetPoint("RIGHT", plus, "LEFT", -4, 0)
     plus.label:SetJustifyH("CENTER")
     minus.label:SetJustifyH("CENTER")
@@ -676,15 +908,16 @@ local function BuildConfig()
     end
     minus:SetScript("OnClick", function() SetScale(-0.1) end)
     plus:SetScript("OnClick", function() SetScale(0.1) end)
-    w[4] = { Refresh = function() scaleText:SetText(("Size: %.1fx"):format(db.scale or 1)) end }
+    local sizeRow = { Refresh = function() scaleText:SetText(("Size: %.1fx"):format(db.scale or 1)) end }
+    w[#w + 1] = sizeRow
 
     local reset = PanelButton(f, "Reset position and size")
-    reset:SetPoint("TOPLEFT", dir, "BOTTOMLEFT", 0, -44)
+    reset:SetPoint("TOPLEFT", picture, "BOTTOMLEFT", 0, -44)
     reset:SetScript("OnClick", function()
         if InCombatLockdown() then return end
         db.point, db.scale = nil, 1
         ApplyLayout()
-        w[4].Refresh()
+        sizeRow.Refresh()
     end)
 
     local note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -757,9 +990,10 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
     elseif cmd == "where" then
         local p = db.point
         Print("Paste this into Settings.lua (in the addon folder) to keep these settings:")
-        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s,"):format(
+        local pic = type(db.picture) == "number" and tostring(db.picture) or ("%q"):format(db.picture or "pentagram")
+        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s,"):format(
             p and p[1] or "CENTER", p and p[2] or "CENTER", p and p[3] or 0, p and p[4] or -180,
-            db.scale or 1, db.dir, tostring(db.locked)))
+            db.scale or 1, db.dir, tostring(db.locked), db.border or "purple", pic))
     elseif cmd == "spells" then
 
         if not InCombatLockdown() then Rebuild() end
@@ -827,6 +1061,10 @@ local function LoadSettings()
     for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
     if not VALID_DIR[db.dir] then db.dir = "up" end
     db.scale = tonumber(db.scale) or 1
+    if not (BORDER_COLORS[db.border] or db.border == "class") then db.border = "purple" end
+    local known = false
+    for _, p in ipairs(PICTURE_LIST) do if p == db.picture then known = true end end
+    if not known or not PictureAvailable(db.picture) then db.picture = "pentagram" end
 end
 
 local function Init()
@@ -835,6 +1073,7 @@ local function Init()
     local warlock, class = IsWarlock()
     if class and not warlock then main:Hide() return end
     ready = true
+    ApplyLook()
     ApplyLayout()
 end
 

@@ -9,6 +9,8 @@
 
 Shows only spells you've learned, works in combat, and displays your soul shards.
 
+In `/wf config` you can pick a border color (purple, fel green, ice blue, fire, black and more, or your class color) and a button picture (the pentagram, a Soul Shard or a warlock spell icon). Works on any client language, including German.
+
 ![The demon flyout in game](art/screenshot.png)
 
 ## Install

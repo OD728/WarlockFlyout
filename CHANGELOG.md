@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6
+
+### New
+- **Border color** in `/wf config`: purple (as before), fel green, ice blue, fire, blood red, gold, silver, pink, black or your class color. It colors the main button's ring, the flyout buttons' borders and their hover glow.
+- **Button picture** in `/wf config`: the pentagram (as before), a Soul Shard, or a warlock icon: Summon Imp, Voidwalker, Succubus, Felhunter, Inferno, Ritual of Doom, Shadow Bolt, Corruption, Rain of Fire, Death Coil, Shadow Ward, Demonic Knowledge, Demonic Pact, Incinerate or Shadow and Flame. Icons your client doesn't have are skipped.
+- Thicker colored border on the main button and the flyout buttons, so the color shows well on the small buttons too.
+- Click either row for the next choice, right-click for the previous one. The new rows are in English and German.
+- `/wf where` and `Settings.lua` include both choices.
+- **Shard count on a small Soul Shard:** the count now sits on a mini hexagon with the Soul Shard icon and the same border as the flyout buttons, instead of the black circle. It uses the game's number font, like stack counts on action bars, and stays centered at any button size.
+- If you carry a soul bag (on Forever: the extra bag slot next to the keyring), the tooltip also shows how full it is.
+
 ## 1.5
 
 ### Fixed
