@@ -13,6 +13,12 @@ In `/wf config` you can pick a border color (purple, fel green, ice blue, fire, 
 
 ![The demon flyout in game](art/screenshot.png)
 
+![Settings window with the demon flyout](art/settings-demons.png)
+
+![Settings window with the summoning and stones flyout](art/settings-utility.png)
+
+![Tooltip with soul shards and soul bag fill](art/tooltip.png)
+
 ## Install
 
 Download it from CurseForge, or copy this repository's files into a folder named
