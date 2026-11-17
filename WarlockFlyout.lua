@@ -482,6 +482,10 @@ end
 local function Refresh()
     local shards = ItemCount(SOUL_SHARD)
     main.count:SetText(shards)
+    -- The font's digits sit a little left of their own width: one digit
+    -- alone looks off-center in the round badge, so nudge it right.
+    main.count:ClearAllPoints()
+    main.count:SetPoint("CENTER", shards < 10 and 1.5 or 0, 0)
     main.badge:SetShown(shards > 0)
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4
+
+### Fixed
+- A single-digit soul shard count is now centered in its badge.
+
 ## 1.3
 
 ### Fixed
