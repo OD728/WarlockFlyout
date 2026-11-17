@@ -311,7 +311,9 @@ badgeTex:SetAllPoints()
 badgeTex:SetTexture(MEDIA .. "badge")
 main.count = main.badge:CreateFontString(nil, "OVERLAY")
 main.count:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
-main.count:SetPoint("CENTER", 0, 0)
+-- The font's digits sit a little left of their own width, so nudge the
+-- count right to look centered in the round badge (one digit or two).
+main.count:SetPoint("CENTER", 1.5, 0)
 main.count:SetTextColor(1, 1, 1)
 
 local function NewFlyout(name)
@@ -482,10 +484,6 @@ end
 local function Refresh()
     local shards = ItemCount(SOUL_SHARD)
     main.count:SetText(shards)
-    -- The font's digits sit a little left of their own width: one digit
-    -- alone looks off-center in the round badge, so nudge it right.
-    main.count:ClearAllPoints()
-    main.count:SetPoint("CENTER", shards < 10 and 1.5 or 0, 0)
     main.badge:SetShown(shards > 0)
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do
