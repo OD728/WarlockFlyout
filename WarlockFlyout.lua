@@ -20,6 +20,8 @@ local L = {
     gold = "Gold", silver = "Silver", pink = "Pink", black = "Black", class = "Class color",
     pentagram = "Pentagram", shard = "Soul Shard",
     knowledge = "Demonic Knowledge", pact = "Demonic Pact", incinerate = "Incinerate", shadowflame = "Shadow and Flame",
+    corner = "Shard badge: %s", showCount = "Show the shard number",
+    bottomright = "bottom right", bottomleft = "bottom left", topright = "top right", topleft = "top left",
 }
 if GetLocale and GetLocale() == "deDE" then
     L.border, L.picture = "Rahmenfarbe: %s", "Button-Bild: %s"
@@ -29,7 +31,17 @@ if GetLocale and GetLocale() == "deDE" then
     L.gold, L.silver, L.pink, L.black, L.class = "Gold", "Silber", "Pink", "Schwarz", "Klassenfarbe"
     L.pentagram, L.shard = "Pentagramm", "Seelensplitter"
     L.knowledge, L.pact, L.incinerate, L.shadowflame = "Dämonisches Wissen", "Dämonischer Pakt", "Verbrennen", "Schatten und Flamme"
+    L.corner, L.showCount = "Splitter-Anzeige: %s", "Splitteranzahl anzeigen"
+    L.bottomright, L.bottomleft, L.topright, L.topleft = "unten rechts", "unten links", "oben rechts", "oben links"
 end
+
+-- Where the shard badge sits: corner of the main button, and the badge center's
+-- offset from that corner (mirrored, so every corner looks the same).
+local CORNER_LIST = { "bottomright", "bottomleft", "topleft", "topright" }
+local CORNERS = {
+    bottomright = { "BOTTOMRIGHT", -5, 6 }, bottomleft = { "BOTTOMLEFT", 5, 6 },
+    topleft = { "TOPLEFT", 5, -6 }, topright = { "TOPRIGHT", -5, -6 },
+}
 
 -- Border colors: they tint the grey hex rings (purple reproduces the original art).
 local BORDER_LIST = { "purple", "fel", "ice", "fire", "blood", "gold", "silver", "pink", "black", "class" }
@@ -65,7 +77,8 @@ local function Panel(f, alpha)
     return edges
 end
 
-local DEFAULTS = { locked = false, scale = 1, dir = "up", shown = true, border = "purple", picture = "pentagram" }
+local DEFAULTS = { locked = false, scale = 1, dir = "up", shown = true, border = "purple", picture = "pentagram",
+    corner = "bottomright", showCount = true }
 
 local DEMONS = {
     { names = { "Summon Imp" }, id = 688, free = true },
@@ -534,6 +547,9 @@ local function ApplyLook()
     else
         main.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)   -- cut off the game icon's own edge
     end
+    local c = CORNERS[db.corner] or CORNERS.bottomright
+    main.badge:ClearAllPoints()
+    main.badge:SetPoint("CENTER", main, c[1], c[2], c[3])
 end
 
 -- Step through a list: dir 1 = next, -1 = previous. Entries `usable` rejects are skipped.
@@ -687,10 +703,26 @@ local function SoulBag()
     return used, total
 end
 
+-- How bright the Soul Shard on the badge is, from 0 (black) to 1 (full color).
+-- Fewer shards = a darker shard, like a shadow creeping in. `showCount` is true
+-- when the white number is drawn on top (it needs a darker shard to stay readable).
+local SHARDS_FULL = 20   -- at this many shards (or more) the shard is at full brightness
+local function ShardShade(shards, showCount)
+    local darkest = 0.2                          -- 0 shards: deep shadow, but still visible
+    local brightest = showCount and 0.6 or 1.0   -- keep it dimmer under the white number
+    local fill = math.min(shards, SHARDS_FULL) / SHARDS_FULL
+    return darkest + (brightest - darkest) * fill
+end
+
 local function Refresh()
     local shards = ItemCount(SOUL_SHARD)
+    local showCount = db.showCount ~= false
     main.count:SetText(shards)
-    main.badge:SetShown(shards > 0)
+    main.count:SetShown(showCount)
+    -- With the number hidden, keep the badge at 0 shards too: a fully dark shard says "empty".
+    main.badge:SetShown(shards > 0 or not showCount)
+    local shade = math.max(0, math.min(1, tonumber(ShardShade(shards, showCount)) or 0.6))
+    main.badge.icon:SetVertexColor(shade, shade, shade)
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do
             if b:IsShown() then
@@ -888,15 +920,23 @@ local function BuildConfig()
     end
     local color = CycleButton(dir, L.border, BORDER_LIST, "border", function(k) return L[k] or k end)
     local picture = CycleButton(color, L.picture, PICTURE_LIST, "picture", PictureName, PictureAvailable)
+    local corner = CycleButton(picture, L.corner, CORNER_LIST, "corner", function(k) return L[k] or k end)
+    local countBox = Check(f, L.showCount, corner, -4,
+        function() return db.showCount ~= false end,
+        function(v) db.showCount = v Refresh() end)
+    countBox:ClearAllPoints()
+    countBox:SetPoint("TOPLEFT", corner, "BOTTOMLEFT", -2, -4)
     w[#w + 1] = color
     w[#w + 1] = picture
+    w[#w + 1] = corner
+    w[#w + 1] = countBox
 
     local scaleText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleText:SetPoint("TOPLEFT", picture, "BOTTOMLEFT", 0, -16)
+    scaleText:SetPoint("TOPLEFT", countBox, "BOTTOMLEFT", 2, -12)
     local plus = PanelButton(f, "+", 26)
     local minus = PanelButton(f, "-", 26)
     plus:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
-    plus:SetPoint("TOP", picture, "BOTTOM", 0, -10)
+    plus:SetPoint("TOP", countBox, "BOTTOM", 0, -6)
     minus:SetPoint("RIGHT", plus, "LEFT", -4, 0)
     plus.label:SetJustifyH("CENTER")
     minus.label:SetJustifyH("CENTER")
@@ -912,7 +952,7 @@ local function BuildConfig()
     w[#w + 1] = sizeRow
 
     local reset = PanelButton(f, "Reset position and size")
-    reset:SetPoint("TOPLEFT", picture, "BOTTOMLEFT", 0, -44)
+    reset:SetPoint("TOPLEFT", countBox, "BOTTOMLEFT", 2, -40)
     reset:SetScript("OnClick", function()
         if InCombatLockdown() then return end
         db.point, db.scale = nil, 1
@@ -991,9 +1031,10 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
         local p = db.point
         Print("Paste this into Settings.lua (in the addon folder) to keep these settings:")
         local pic = type(db.picture) == "number" and tostring(db.picture) or ("%q"):format(db.picture or "pentagram")
-        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s,"):format(
+        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s, corner = %q, showCount = %s,"):format(
             p and p[1] or "CENTER", p and p[2] or "CENTER", p and p[3] or 0, p and p[4] or -180,
-            db.scale or 1, db.dir, tostring(db.locked), db.border or "purple", pic))
+            db.scale or 1, db.dir, tostring(db.locked), db.border or "purple", pic,
+            db.corner or "bottomright", tostring(db.showCount ~= false)))
     elseif cmd == "spells" then
 
         if not InCombatLockdown() then Rebuild() end
@@ -1065,6 +1106,8 @@ local function LoadSettings()
     local known = false
     for _, p in ipairs(PICTURE_LIST) do if p == db.picture then known = true end end
     if not known or not PictureAvailable(db.picture) then db.picture = "pentagram" end
+    if not CORNERS[db.corner] then db.corner = "bottomright" end
+    db.showCount = db.showCount ~= false
 end
 
 local function Init()

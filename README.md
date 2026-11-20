@@ -9,11 +9,11 @@
 
 Shows only spells you've learned, works in combat, and displays your soul shards.
 
-In `/wf config` you can pick a border color (purple, fel green, ice blue, fire, black and more, or your class color) and a button picture (the pentagram, a Soul Shard or a warlock spell icon). Works on any client language, including German.
+In `/wf config` you can pick a border color (purple, fel green, ice blue, fire, black and more, or your class color) and a button picture (the pentagram, a Soul Shard or a warlock spell icon). The shard badge can sit in any corner, show or hide its number, and its Soul Shard darkens as you run low. Works on any client language, including German.
 
 ![The demon flyout in game](art/screenshot.png)
 
-![Settings window with the demon flyout](art/settings-demons.png)
+![Settings window, and the shard badge from few shards to full](art/settings-shards.png)
 
 ![Settings window with the summoning and stones flyout](art/settings-utility.png)
 

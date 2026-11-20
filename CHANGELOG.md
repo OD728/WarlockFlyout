@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7
+
+### New
+- **Shard badge corner** in `/wf config`: bottom right (as before), bottom left, top left or top right.
+- **Show the shard number** in `/wf config`: turn it off to show only the Soul Shard. The badge then also stays at 0 shards, fully dark, so you can see you're out.
+- The Soul Shard on the badge **darkens as you run low**, like a creeping shadow: full color from 20 shards, a deep shadow at 0. With the number shown it stays a little dimmer, so the number is easy to read.
+- The new rows are in English and German, and `/wf where` and `Settings.lua` include both new settings.
+- The addon now carries its CurseForge project ID, so the CurseForge app recognizes copies you installed by hand.
+
 ## 1.6
 
 ### New

@@ -13,6 +13,8 @@
 --   border  = "purple", "fel", "ice", "fire", "blood", "gold", "silver", "pink", "black" or "class"
 --   picture = "pentagram", "shard", "knowledge", "pact", "incinerate", "shadowflame",
 --             or a spell ID such as 688 (Summon Imp)
+--   corner    = "bottomright", "bottomleft", "topleft" or "topright" (where the shard badge sits)
+--   showCount = true or false (the number on the shard badge)
 
 WarlockFlyoutSettings = {
     -- point = { "CENTER", "CENTER", 0, -180 }, scale = 1.0, dir = "up", locked = false,
