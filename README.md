@@ -9,9 +9,11 @@
 
 Shows only spells you've learned, works in combat, and displays your soul shards.
 
-In `/wf config` you can pick a border color (purple, fel green, ice blue, fire, black and more, or your class color) and a button picture (the pentagram, a Soul Shard or a warlock spell icon). The shard badge can sit in any corner, show or hide its number, and its Soul Shard darkens as you run low. Works on any client language, including German.
+In `/wf config` you can pick a border color and a button picture (the pentagram, a Soul Shard or a warlock spell icon). The border colors are a menu of swatches: warlock colors (purple, fel green, ice blue, fire, blood red, pink), gold, silver, black, your class color, the game's bar and item quality colors, and the Cyberpunk, Dracula, Gruvbox, Catppuccin, Rosé Pine, Kanagawa, OneDark and Tokyo Night color schemes. The shard badge can sit in any corner, show or hide its number, and its Soul Shard darkens as you run low. Works on any client language, including German.
 
 ![The demon flyout in game](art/screenshot.png)
+
+![Settings window with the border color menu](art/settings-colors.png)
 
 ![Settings window, and the shard badge from few shards to full](art/settings-shards.png)
 

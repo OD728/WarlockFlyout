@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8
+
+### New
+- **Border color** has its own section in `/wf config`: every color is a swatch, one row per family, instead of a button to click through. Click one to use it, hover for its name; the white ring marks the current color.
+- **60 new border colors**: Classic (the game's bar colors), Quality (item colors), Cyberpunk, Dracula, Gruvbox, Catppuccin, Rosé Pine, Kanagawa, OneDark and Tokyo Night. Your current color stays selected.
+- The new rows are in English and German; the game's own colors use the client's words (Health, Mana, Epic, ...).
+
+### Changed
+- The settings window is dark gray, the same look as the author's other addons. The flyout itself keeps its purple.
+
 ## 1.7
 
 ### New

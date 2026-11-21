@@ -22,6 +22,8 @@ local L = {
     knowledge = "Demonic Knowledge", pact = "Demonic Pact", incinerate = "Incinerate", shadowflame = "Shadow and Flame",
     corner = "Shard badge: %s", showCount = "Show the shard number",
     bottomright = "bottom right", bottomleft = "bottom left", topright = "top right", topleft = "top left",
+    famWarlock = "Warlock", famBasic = "Basics", famClassic = "Classic", famQuality = "Quality",
+    cast = "Cast bar", rested = "Rested",
 }
 if GetLocale and GetLocale() == "deDE" then
     L.border, L.picture = "Rahmenfarbe: %s", "Button-Bild: %s"
@@ -33,6 +35,8 @@ if GetLocale and GetLocale() == "deDE" then
     L.knowledge, L.pact, L.incinerate, L.shadowflame = "Dämonisches Wissen", "Dämonischer Pakt", "Verbrennen", "Schatten und Flamme"
     L.corner, L.showCount = "Splitter-Anzeige: %s", "Splitteranzahl anzeigen"
     L.bottomright, L.bottomleft, L.topright, L.topleft = "unten rechts", "unten links", "oben rechts", "oben links"
+    L.famWarlock, L.famBasic, L.famClassic, L.famQuality = "Hexenmeister", "Grundfarben", "Klassisch", "Qualität"
+    L.cast, L.rested = "Zauberleiste", "Erholt"
 end
 
 -- Where the shard badge sits: corner of the main button, and the badge center's
@@ -44,12 +48,52 @@ local CORNERS = {
 }
 
 -- Border colors: they tint the grey hex rings (purple reproduces the original art).
-local BORDER_LIST = { "purple", "fel", "ice", "fire", "blood", "gold", "silver", "pink", "black", "class" }
 local BORDER_COLORS = {
     purple = { 0.635, 0.345, 1.00 }, fel = { 0.45, 1.00, 0.25 }, ice = { 0.35, 0.75, 1.00 },
     fire = { 1.00, 0.45, 0.15 }, blood = { 1.00, 0.18, 0.25 }, gold = { 1.00, 0.80, 0.30 },
     silver = { 0.85, 0.85, 0.90 }, pink = { 1.00, 0.35, 0.80 }, black = { 0.08, 0.08, 0.09 },
+    -- Six accents from each color scheme (same values as Cooldown Skin and XP Rail).
+    drac_purple = { 0.74, 0.58, 0.98 }, drac_pink = { 1.00, 0.47, 0.78 }, drac_red = { 1.00, 0.33, 0.33 },
+    drac_orange = { 1.00, 0.72, 0.42 }, drac_green = { 0.31, 0.98, 0.48 }, drac_cyan = { 0.55, 0.91, 0.99 },
+    ctp_mauve = { 0.80, 0.65, 0.97 }, ctp_pink = { 0.96, 0.76, 0.91 }, ctp_red = { 0.95, 0.55, 0.66 },
+    ctp_peach = { 0.98, 0.70, 0.53 }, ctp_green = { 0.65, 0.89, 0.63 }, ctp_blue = { 0.54, 0.71, 0.98 },
+    gruv_red = { 0.98, 0.29, 0.20 }, gruv_orange = { 1.00, 0.50, 0.10 }, gruv_yellow = { 0.98, 0.74, 0.18 },
+    gruv_green = { 0.72, 0.73, 0.15 }, gruv_aqua = { 0.56, 0.75, 0.49 }, gruv_purple = { 0.83, 0.53, 0.61 },
+    rose_love = { 0.92, 0.44, 0.57 }, rose_gold = { 0.96, 0.76, 0.47 }, rose_rose = { 0.92, 0.74, 0.73 },
+    rose_pine = { 0.19, 0.45, 0.56 }, rose_foam = { 0.61, 0.81, 0.85 }, rose_iris = { 0.77, 0.65, 0.91 },
+    kana_violet = { 0.58, 0.50, 0.72 }, kana_pink = { 0.82, 0.49, 0.60 }, kana_red = { 0.89, 0.41, 0.46 },
+    kana_orange = { 1.00, 0.63, 0.40 }, kana_green = { 0.60, 0.73, 0.42 }, kana_blue = { 0.49, 0.61, 0.85 },
+    one_purple = { 0.78, 0.47, 0.87 }, one_red = { 0.91, 0.40, 0.44 }, one_orange = { 0.82, 0.60, 0.40 },
+    one_yellow = { 0.90, 0.75, 0.48 }, one_green = { 0.60, 0.76, 0.47 }, one_blue = { 0.38, 0.69, 0.94 },
+    tokyo_magenta = { 0.73, 0.60, 0.97 }, tokyo_red = { 0.97, 0.46, 0.56 }, tokyo_orange = { 1.00, 0.62, 0.39 },
+    tokyo_yellow = { 0.88, 0.69, 0.41 }, tokyo_green = { 0.62, 0.81, 0.42 }, tokyo_blue = { 0.48, 0.64, 0.97 },
+    cyber_yellow = { 0.99, 0.93, 0.04 }, cyber_pink = { 1.00, 0.16, 0.43 }, cyber_cyan = { 0.02, 0.85, 0.91 },
+    cyber_red = { 1.00, 0.00, 0.24 }, cyber_acid = { 0.22, 1.00, 0.08 }, cyber_purple = { 0.69, 0.15, 1.00 },
+    -- The game's own colors: the default bars, then item quality.
+    cl_health = { 0.00, 1.00, 0.00 }, cl_mana = { 0.10, 0.40, 1.00 }, cl_rage = { 1.00, 0.00, 0.00 },
+    cl_energy = { 1.00, 1.00, 0.00 }, cl_cast = { 1.00, 0.70, 0.00 }, cl_rested = { 0.00, 0.39, 0.88 },
+    q_uncommon = { 0.12, 1.00, 0.00 }, q_rare = { 0.00, 0.44, 0.87 }, q_epic = { 0.64, 0.21, 0.93 },
+    q_legendary = { 1.00, 0.50, 0.00 }, q_artifact = { 0.90, 0.80, 0.50 }, q_heirloom = { 0.00, 0.80, 1.00 },
 }
+-- The swatch rows in the settings window, one family per row ("class" is computed).
+-- Same order in all the addons: their own rows, WoW colors, neon styles, then the
+-- color schemes in the order of the Colorschemes page.
+local BORDER_ROWS = {
+    { fam = "warlock", list = { "purple", "fel", "ice", "fire", "blood", "pink" } },
+    { fam = "basic",   list = { "gold", "silver", "black", "class" } },
+    { fam = "cl",    list = { "cl_health", "cl_mana", "cl_rage", "cl_energy", "cl_cast", "cl_rested" } },
+    { fam = "q",     list = { "q_uncommon", "q_rare", "q_epic", "q_legendary", "q_artifact", "q_heirloom" } },
+    { fam = "cyber", list = { "cyber_yellow", "cyber_pink", "cyber_cyan", "cyber_red", "cyber_acid", "cyber_purple" } },
+    { fam = "drac",  list = { "drac_purple", "drac_pink", "drac_red", "drac_orange", "drac_green", "drac_cyan" } },
+    { fam = "gruv",  list = { "gruv_red", "gruv_orange", "gruv_yellow", "gruv_green", "gruv_aqua", "gruv_purple" } },
+    { fam = "ctp",   list = { "ctp_mauve", "ctp_pink", "ctp_red", "ctp_peach", "ctp_green", "ctp_blue" } },
+    { fam = "rose",  list = { "rose_love", "rose_gold", "rose_rose", "rose_pine", "rose_foam", "rose_iris" } },
+    { fam = "kana",  list = { "kana_violet", "kana_pink", "kana_red", "kana_orange", "kana_green", "kana_blue" } },
+    { fam = "one",   list = { "one_purple", "one_red", "one_orange", "one_yellow", "one_green", "one_blue" } },
+    { fam = "tokyo", list = { "tokyo_magenta", "tokyo_red", "tokyo_orange", "tokyo_yellow", "tokyo_green", "tokyo_blue" } },
+}
+local SCHEME_NAMES = { drac = "Dracula", ctp = "Catppuccin", gruv = "Gruvbox", rose = "Rosé Pine",
+    kana = "Kanagawa", one = "OneDark", tokyo = "Tokyo Night", cyber = "Cyberpunk" }
 
 -- Button pictures: the original art, or a game icon (by spell or item ID, so names
 -- come out in the client's language). Talents from later expansions have no spell
@@ -61,17 +105,23 @@ local PICTURE_ICONS = {
     incinerate = "spell_fire_burnout", shadowflame = "spell_shadow_shadowandflame",
 }
 
-local function Panel(f, alpha)
+-- The settings window's colors: the same dark gray as Cooldown Skin's and XP Rail's
+-- windows (the flyout itself stays purple).
+local UI_FILL = { 0.05, 0.05, 0.06 }
+local UI_EDGE = { 0.30, 0.30, 0.33 }
+
+local function Panel(f, alpha, fill, edge)
+    fill, edge = fill or FILL, edge or EDGE
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(FILL[1], FILL[2], FILL[3], alpha or 0.92)
+    bg:SetColorTexture(fill[1], fill[2], fill[3], alpha or 0.92)
     local edges = { bg }
     for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" },
                          { "TOPLEFT", "BOTTOMLEFT", true }, { "TOPRIGHT", "BOTTOMRIGHT", true } }) do
         local t = f:CreateTexture(nil, "BORDER")
         t:SetPoint(e[1]); t:SetPoint(e[2])
         if e[3] then t:SetWidth(1) else t:SetHeight(1) end
-        t:SetColorTexture(EDGE[1], EDGE[2], EDGE[3], 1)
+        t:SetColorTexture(edge[1], edge[2], edge[3], 1)
         edges[#edges + 1] = t
     end
     return edges
@@ -335,15 +385,46 @@ local function HexMask(owner, tex)
     end)
 end
 
-local function BorderColor()
-    if db.border == "class" then
+-- A border color by key: "class" is the warlock class color, brightened to full.
+local function ColorOf(key)
+    if key == "class" then
         local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS.WARLOCK
         if c and c.r then
             local m = math.max(c.r, c.g, c.b, 0.01)
             return { c.r / m, c.g / m, c.b / m }
         end
     end
-    return BORDER_COLORS[db.border] or BORDER_COLORS.purple
+    return BORDER_COLORS[key] or BORDER_COLORS.purple
+end
+
+local function BorderColor() return ColorOf(db.border) end
+
+-- Names for the swatch rows and tooltips. Game colors use the client's own words
+-- (HEALTH, MANA, ITEM_QUALITYn_DESC), so they come out in its language.
+local GAME_WORDS = {
+    cl_health = function() return HEALTH or "Health" end, cl_mana = function() return MANA or "Mana" end,
+    cl_rage = function() return RAGE or "Rage" end, cl_energy = function() return ENERGY or "Energy" end,
+    cl_cast = function() return L.cast end, cl_rested = function() return L.rested end,
+    q_uncommon = function() return ITEM_QUALITY2_DESC or "Uncommon" end,
+    q_rare = function() return ITEM_QUALITY3_DESC or "Rare" end,
+    q_epic = function() return ITEM_QUALITY4_DESC or "Epic" end,
+    q_legendary = function() return ITEM_QUALITY5_DESC or "Legendary" end,
+    q_artifact = function() return ITEM_QUALITY6_DESC or "Artifact" end,
+    q_heirloom = function() return ITEM_QUALITY7_DESC or "Heirloom" end,
+}
+local function FamilyName(fam)
+    return SCHEME_NAMES[fam] or ({ warlock = L.famWarlock, basic = L.famBasic, cl = L.famClassic,
+        q = L.famQuality })[fam] or fam
+end
+local function BorderName(key)
+    if L[key] then return L[key] end
+    local word = GAME_WORDS[key] and GAME_WORDS[key]()
+    local fam, color = key:match("^(%a+)_(%a+)$")
+    if word then return word end
+    if fam and SCHEME_NAMES[fam] then
+        return SCHEME_NAMES[fam] .. " " .. color:sub(1, 1):upper() .. color:sub(2)
+    end
+    return key
 end
 
 -- The hover glow: the border color, lighter. Purple keeps its original glow.
@@ -811,17 +892,17 @@ local function PanelButton(parent, text, w)
     b:SetSize(w or CFG_INNER, 22)
     local bg = b:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(EDGE[1] * 0.45, EDGE[2] * 0.45, EDGE[3] * 0.45, 1)
+    bg:SetColorTexture(0.12, 0.12, 0.13, 1)
     for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" },
                          { "TOPLEFT", "BOTTOMLEFT", true }, { "TOPRIGHT", "BOTTOMRIGHT", true } }) do
         local t = b:CreateTexture(nil, "BORDER")
         t:SetPoint(e[1]); t:SetPoint(e[2])
         if e[3] then t:SetWidth(1) else t:SetHeight(1) end
-        t:SetColorTexture(EDGE[1], EDGE[2], EDGE[3], 1)
+        t:SetColorTexture(UI_EDGE[1], UI_EDGE[2], UI_EDGE[3], 1)
     end
     local hl = b:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
-    hl:SetColorTexture(GLOW[1], GLOW[2], GLOW[3], 0.15)
+    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.15)
     b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     b.label:SetPoint("LEFT", 6, 0)
     b.label:SetPoint("RIGHT", -6, 0)
@@ -842,7 +923,7 @@ local function BuildConfig()
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
-    Panel(f, 0.95)
+    Panel(f, 0.95, UI_FILL, UI_EDGE)
 
     local close = CreateFrame("Button", nil, f)
     close:SetSize(20, 20)
@@ -874,7 +955,7 @@ local function BuildConfig()
 
     local rule = f:CreateTexture(nil, "BORDER")
     rule:SetHeight(1)
-    rule:SetColorTexture(EDGE[1], EDGE[2], EDGE[3], 0.6)
+    rule:SetColorTexture(UI_EDGE[1], UI_EDGE[2], UI_EDGE[3], 0.8)
     rule:SetPoint("LEFT", f, "LEFT", CFG_PAD, 0)
     rule:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
     rule:SetPoint("TOP", logo, "BOTTOM", 0, -10)
@@ -899,7 +980,7 @@ local function BuildConfig()
     end)
     w[3] = dir
 
-    -- Border color and button picture: click for the next, right-click for the previous.
+    -- Button picture and shard badge: click for the next, right-click for the previous.
     local function CycleButton(anchor, label, list, key, nameOf, usable)
         local b = PanelButton(f, "")
         b:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -6)
@@ -918,15 +999,13 @@ local function BuildConfig()
         b:SetScript("OnLeave", GameTooltip_Hide)
         return b
     end
-    local color = CycleButton(dir, L.border, BORDER_LIST, "border", function(k) return L[k] or k end)
-    local picture = CycleButton(color, L.picture, PICTURE_LIST, "picture", PictureName, PictureAvailable)
+    local picture = CycleButton(dir, L.picture, PICTURE_LIST, "picture", PictureName, PictureAvailable)
     local corner = CycleButton(picture, L.corner, CORNER_LIST, "corner", function(k) return L[k] or k end)
     local countBox = Check(f, L.showCount, corner, -4,
         function() return db.showCount ~= false end,
         function(v) db.showCount = v Refresh() end)
     countBox:ClearAllPoints()
     countBox:SetPoint("TOPLEFT", corner, "BOTTOMLEFT", -2, -4)
-    w[#w + 1] = color
     w[#w + 1] = picture
     w[#w + 1] = corner
     w[#w + 1] = countBox
@@ -951,8 +1030,73 @@ local function BuildConfig()
     local sizeRow = { Refresh = function() scaleText:SetText(("Size: %.1fx"):format(db.scale or 1)) end }
     w[#w + 1] = sizeRow
 
+    -- Border color: its own section, one row of swatches per family. Click one to
+    -- use it, hover for its name; the white ring marks the current color.
+    local sec = CreateFrame("Frame", nil, f)
+    sec:SetPoint("TOPLEFT", countBox, "BOTTOMLEFT", 2, -40)
+    sec:SetWidth(CFG_INNER)
+    local secRule = sec:CreateTexture(nil, "BORDER")
+    secRule:SetHeight(1)
+    secRule:SetColorTexture(UI_EDGE[1], UI_EDGE[2], UI_EDGE[3], 0.8)
+    secRule:SetPoint("TOPLEFT")
+    secRule:SetPoint("TOPRIGHT")
+    -- Gold like the section headings in the other addons' windows.
+    local head = sec:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    head:SetPoint("TOPLEFT", 0, -10)
+    local SW_W, SW_H, SW_GAP, ROW_H = 30, 14, 4, 19
+    local LABEL_W = CFG_INNER - 6 * (SW_W + SW_GAP) + SW_GAP
+    local swatches = {}
+    local function RefreshColors()
+        head:SetText(L.border:format(BorderName(db.border)))
+        for _, sw in ipairs(swatches) do
+            local c = ColorOf(sw.key)
+            sw.fill:SetColorTexture(c[1], c[2], c[3], 1)
+            sw.ring:SetShown(sw.key == db.border)
+        end
+    end
+    local y = -32
+    for _, row in ipairs(BORDER_ROWS) do
+        local fl = sec:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        fl:SetPoint("TOPLEFT", 0, y - 1)
+        fl:SetWidth(LABEL_W - 4)
+        fl:SetJustifyH("LEFT")
+        fl:SetWordWrap(false)
+        fl:SetText(FamilyName(row.fam))
+        for i, key in ipairs(row.list) do
+            local s = CreateFrame("Button", nil, sec)
+            s:SetSize(SW_W, SW_H)
+            s:SetPoint("TOPLEFT", LABEL_W + (i - 1) * (SW_W + SW_GAP), y)
+            local ring = s:CreateTexture(nil, "BACKGROUND")
+            ring:SetPoint("TOPLEFT", -2, 2)
+            ring:SetPoint("BOTTOMRIGHT", 2, -2)
+            ring:SetColorTexture(1, 1, 1, 1)
+            local edge = s:CreateTexture(nil, "BORDER")
+            edge:SetAllPoints()
+            edge:SetColorTexture(0, 0, 0, 1)
+            local fill = s:CreateTexture(nil, "ARTWORK")
+            fill:SetPoint("TOPLEFT", 1, -1)
+            fill:SetPoint("BOTTOMRIGHT", -1, 1)
+            s:SetScript("OnClick", function()
+                db.border = key
+                ApplyLook()
+                RefreshColors()
+            end)
+            s:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText(BorderName(key))
+                GameTooltip:Show()
+            end)
+            s:SetScript("OnLeave", GameTooltip_Hide)
+            swatches[#swatches + 1] = { key = key, ring = ring, fill = fill }
+        end
+        y = y - ROW_H
+    end
+    sec:SetHeight(-y)
+    sec.Refresh = RefreshColors
+    w[#w + 1] = sec
+
     local reset = PanelButton(f, "Reset position and size")
-    reset:SetPoint("TOPLEFT", countBox, "BOTTOMLEFT", 2, -40)
+    reset:SetPoint("TOPLEFT", sec, "BOTTOMLEFT", 0, -10)
     reset:SetScript("OnClick", function()
         if InCombatLockdown() then return end
         db.point, db.scale = nil, 1
