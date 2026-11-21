@@ -2,7 +2,7 @@
 
 ![Warlock Flyout](art/curseforge-logo.png)
 
-**One button for your warlock**, made for WoW: Forever.
+**WoW: Forever addon:** one button for your warlock.
 
 - **Left-click:** summon any demon you know. Shift-click casts Fel Domination first.
 - **Right-click:** Ritual of Summoning, Create Healthstone, Create Soulstone, Create Firestone and Create Spellstone, always your best rank.
