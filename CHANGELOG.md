@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9
+
+### New
+- **Warlock Flyout in the game's options**: Esc > Options > AddOns now lists Warlock Flyout, with a button that opens the settings window. `/wf config` still works too.
+- The new text is in English and German.
+
 ## 1.8
 
 ### New

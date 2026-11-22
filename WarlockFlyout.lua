@@ -24,6 +24,8 @@ local L = {
     bottomright = "bottom right", bottomleft = "bottom left", topright = "top right", topleft = "top left",
     famWarlock = "Warlock", famBasic = "Basics", famClassic = "Classic", famQuality = "Quality",
     cast = "Cast bar", rested = "Rested",
+    title = "Warlock Flyout", openBtn = "Open Warlock Flyout",
+    openNote = "The options open in their own window (also with /wf).",
 }
 if GetLocale and GetLocale() == "deDE" then
     L.border, L.picture = "Rahmenfarbe: %s", "Button-Bild: %s"
@@ -37,6 +39,7 @@ if GetLocale and GetLocale() == "deDE" then
     L.bottomright, L.bottomleft, L.topright, L.topleft = "unten rechts", "unten links", "oben rechts", "oben links"
     L.famWarlock, L.famBasic, L.famClassic, L.famQuality = "Hexenmeister", "Grundfarben", "Klassisch", "Qualität"
     L.cast, L.rested = "Zauberleiste", "Erholt"
+    L.openBtn, L.openNote = "Warlock Flyout öffnen", "Die Optionen öffnen sich in einem eigenen Fenster (auch mit /wf)."
 end
 
 -- Where the shard badge sits: corner of the main button, and the badge center's
@@ -1132,6 +1135,28 @@ function Addon.ToggleConfig()
     config:SetShown(not config:IsShown())
 end
 
+-- An entry under Esc > Options > AddOns that opens the settings window.
+local function RegisterSettings()
+    if not (Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory) then return end
+    local c = CreateFrame("Frame")
+    local t = c:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    t:SetPoint("TOPLEFT", 16, -16)
+    t:SetText(L.title)
+    local s = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    s:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -8)
+    s:SetText(L.openNote)
+    local b = CreateFrame("Button", nil, c, "UIPanelButtonTemplate")
+    b:SetSize(200, 24)
+    b:SetPoint("TOPLEFT", s, "BOTTOMLEFT", 0, -12)
+    b:SetText(L.openBtn)
+    b:SetScript("OnClick", function()
+        if SettingsPanel and SettingsPanel:IsShown() and HideUIPanel then HideUIPanel(SettingsPanel) end
+        config = config or BuildConfig()
+        config:Show()
+    end)
+    pcall(function() Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(c, L.title)) end)
+end
+
 local function SetLocked(v)
     if v == nil then v = not db.locked end
     db.locked = v and true or false
@@ -1278,7 +1303,10 @@ end
 
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
-        if arg1 == addonName then LoadSettings() end
+        if arg1 == addonName then
+            LoadSettings()
+            RegisterSettings()
+        end
         return
     elseif event == "PLAYER_LOGIN" then
         Init()
