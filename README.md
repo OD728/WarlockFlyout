@@ -15,10 +15,6 @@ In `/wf config` you can pick a border color and a button picture (the pentagram,
 
 ![Settings window with the border color menu](art/settings-colors.png)
 
-![Settings window, and the shard badge from few shards to full](art/settings-shards.png)
-
-![Settings window with the summoning and stones flyout](art/settings-utility.png)
-
 ![Tooltip with soul shards and soul bag fill](art/tooltip.png)
 
 ## Install
