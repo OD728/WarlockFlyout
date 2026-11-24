@@ -21,7 +21,7 @@ local L = {
     pentagram = "Pentagram", shard = "Soul Shard",
     knowledge = "Demonic Knowledge", pact = "Demonic Pact", incinerate = "Incinerate", shadowflame = "Shadow and Flame",
     corner = "Shard badge: %s", showCount = "Show the shard number",
-    warnHealthstone = "Warn when I have no healthstone", noHealthstone = "No healthstone in your bags: right-click and create one",
+    warnShards = "Glow the shard badge below 2 shards", warnHealthstone = "Warn when I have no healthstone", noHealthstone = "No healthstone in your bags: right-click and create one",
     bottomright = "bottom right", bottomleft = "bottom left", topright = "top right", topleft = "top left",
     famWarlock = "Warlock", famBasic = "Basics", famClassic = "Classic", famQuality = "Quality",
     cast = "Cast bar", rested = "Rested",
@@ -37,6 +37,7 @@ if GetLocale and GetLocale() == "deDE" then
     L.pentagram, L.shard = "Pentagramm", "Seelensplitter"
     L.knowledge, L.pact, L.incinerate, L.shadowflame = "Dämonisches Wissen", "Dämonischer Pakt", "Verbrennen", "Schatten und Flamme"
     L.corner, L.showCount = "Splitter-Anzeige: %s", "Splitteranzahl anzeigen"
+    L.warnShards = "Splitter-Anzeige leuchtet bei weniger als 2 Splittern"
     L.warnHealthstone, L.noHealthstone = "Warnen, wenn ich keinen Gesundheitsstein habe", "Kein Gesundheitsstein in den Taschen: Rechtsklick und einen herstellen"
     L.bottomright, L.bottomleft, L.topright, L.topleft = "unten rechts", "unten links", "oben rechts", "oben links"
     L.famWarlock, L.famBasic, L.famClassic, L.famQuality = "Hexenmeister", "Grundfarben", "Klassisch", "Qualität"
@@ -133,7 +134,7 @@ local function Panel(f, alpha, fill, edge)
 end
 
 local DEFAULTS = { locked = false, scale = 1, dir = "up", shown = true, border = "purple", picture = "pentagram",
-    corner = "bottomright", showCount = true, warnHealthstone = false }
+    corner = "bottomright", showCount = true, warnHealthstone = false, warnShards = false }
 
 local DEMONS = {
     { names = { "Summon Imp" }, id = 688, free = true },
@@ -569,6 +570,33 @@ do
     a:SetDuration(0.9)
 end
 
+-- Optional warning: the shard badge glows in the shards' purple below 2 shards.
+main.shardGlow = main.badge:CreateTexture(nil, "OVERLAY", nil, 6)
+main.shardGlow:SetPoint("CENTER")
+main.shardGlow:SetSize(22 * 1.5, 22 * 1.5)
+main.shardGlow:SetTexture(MEDIA .. "hex_glow")
+main.shardGlow:SetBlendMode("ADD")
+main.shardGlow:SetVertexColor(GLOW[1], GLOW[2], GLOW[3])
+main.shardGlow:Hide()
+main.shardGlow.anim = main.shardGlow:CreateAnimationGroup()
+main.shardGlow.anim:SetLooping("BOUNCE")
+do
+    local a = main.shardGlow.anim:CreateAnimation("Alpha")
+    a:SetFromAlpha(0.7)
+    a:SetToAlpha(0.15)
+    a:SetDuration(0.9)
+end
+
+local function UpdateShardGlow(shards)
+    if db.warnShards == true and shards < 2 then
+        main.shardGlow:Show()
+        main.shardGlow.anim:Play()
+    else
+        main.shardGlow.anim:Stop()
+        main.shardGlow:Hide()
+    end
+end
+
 local function UpdateWarning()
     local on = db.warnHealthstone == true and Addon.canMakeHealthstone and not HasHealthstone()
     main.missingHealthstone = on and true or false
@@ -850,7 +878,8 @@ local function Refresh()
     main.count:SetText(shards)
     main.count:SetShown(showCount)
     -- With the number hidden, keep the badge at 0 shards too: a fully dark shard says "empty".
-    main.badge:SetShown(shards > 0 or not showCount)
+    main.badge:SetShown(shards > 0 or not showCount or (db.warnShards == true and shards < 2))
+    UpdateShardGlow(shards)
     local shade = math.max(0, math.min(1, tonumber(ShardShade(shards, showCount)) or 0.6))
     main.badge.icon:SetVertexColor(shade, shade, shade)
     UpdateWarning()
@@ -1062,15 +1091,19 @@ local function BuildConfig()
     local warnBox = Check(f, L.warnHealthstone, countBox, -2,
         function() return db.warnHealthstone == true end,
         function(v) db.warnHealthstone = v Refresh() end)
+    local shardBox = Check(f, L.warnShards, warnBox, -2,
+        function() return db.warnShards == true end,
+        function(v) db.warnShards = v Refresh() end)
     w[#w + 1] = countBox
     w[#w + 1] = warnBox
+    w[#w + 1] = shardBox
 
     local scaleText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleText:SetPoint("TOPLEFT", warnBox, "BOTTOMLEFT", 2, -12)
+    scaleText:SetPoint("TOPLEFT", shardBox, "BOTTOMLEFT", 2, -12)
     local plus = PanelButton(f, "+", 26)
     local minus = PanelButton(f, "-", 26)
     plus:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
-    plus:SetPoint("TOP", warnBox, "BOTTOM", 0, -6)
+    plus:SetPoint("TOP", shardBox, "BOTTOM", 0, -6)
     minus:SetPoint("RIGHT", plus, "LEFT", -4, 0)
     plus.label:SetJustifyH("CENTER")
     minus.label:SetJustifyH("CENTER")
@@ -1088,7 +1121,7 @@ local function BuildConfig()
     -- Border color: its own section, one row of swatches per family. Click one to
     -- use it, hover for its name; the white ring marks the current color.
     local sec = CreateFrame("Frame", nil, f)
-    sec:SetPoint("TOPLEFT", warnBox, "BOTTOMLEFT", 2, -40)
+    sec:SetPoint("TOPLEFT", shardBox, "BOTTOMLEFT", 2, -40)
     sec:SetWidth(CFG_INNER)
     local secRule = sec:CreateTexture(nil, "BORDER")
     secRule:SetHeight(1)
@@ -1252,10 +1285,10 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
         local p = db.point
         Print("Paste this into Settings.lua (in the addon folder) to keep these settings:")
         local pic = type(db.picture) == "number" and tostring(db.picture) or ("%q"):format(db.picture or "pentagram")
-        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s, corner = %q, showCount = %s, warnHealthstone = %s,"):format(
+        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s, corner = %q, showCount = %s, warnHealthstone = %s, warnShards = %s,"):format(
             p and p[1] or "CENTER", p and p[2] or "CENTER", p and p[3] or 0, p and p[4] or -180,
             db.scale or 1, db.dir, tostring(db.locked), db.border or "purple", pic,
-            db.corner or "bottomright", tostring(db.showCount ~= false), tostring(db.warnHealthstone == true)))
+            db.corner or "bottomright", tostring(db.showCount ~= false), tostring(db.warnHealthstone == true), tostring(db.warnShards == true)))
     elseif cmd == "spells" then
 
         if not InCombatLockdown() then Rebuild() end
@@ -1330,6 +1363,7 @@ local function LoadSettings()
     if not CORNERS[db.corner] then db.corner = "bottomright" end
     db.showCount = db.showCount ~= false
     db.warnHealthstone = db.warnHealthstone == true
+    db.warnShards = db.warnShards == true
 end
 
 local function Init()

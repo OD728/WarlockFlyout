@@ -4,6 +4,7 @@
 
 ### New
 - **Healthstone warning** (off by default): turn on "Warn when I have no healthstone" in `/wf config` and the button pulses green while you carry no healthstone. It only shows if you know Create Healthstone, and the tooltip tells you to right-click and make one. It stops as soon as you have one.
+- **Low shard glow** (off by default): turn on "Glow the shard badge below 2 shards" in `/wf config` and the Soul Shard badge glows in the shards' purple when you have 0 or 1 shard. The badge stays visible at 0 shards while this is on.
 - The new text is in English and German, and `/wf where` and `Settings.lua` include the setting.
 
 ## 1.9

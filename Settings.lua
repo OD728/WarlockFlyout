@@ -16,6 +16,7 @@
 --   corner    = "bottomright", "bottomleft", "topleft" or "topright" (where the shard badge sits)
 --   showCount = true or false (the number on the shard badge)
 --   warnHealthstone = true or false (green pulse on the button while you have no healthstone)
+--   warnShards = true or false (shard badge glows below 2 soul shards)
 
 WarlockFlyoutSettings = {
     -- point = { "CENTER", "CENTER", 0, -180 }, scale = 1.0, dir = "up", locked = false,
