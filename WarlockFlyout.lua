@@ -575,9 +575,11 @@ local function UpdateWarning()
     if on then
         main.warn:Show()
         main.warn.anim:Play()
+        main.frameArt:SetVertexColor(0.3, 0.85, 0.3)   -- the ring turns green too
     else
         main.warn.anim:Stop()
         main.warn:Hide()
+        TintFace(main)                                 -- back to your border color
     end
 end
 
@@ -675,6 +677,7 @@ local function ApplyLook()
     local c = CORNERS[db.corner] or CORNERS.bottomright
     main.badge:ClearAllPoints()
     main.badge:SetPoint("CENTER", main, c[1], c[2], c[3])
+    UpdateWarning()
 end
 
 -- Step through a list: dir 1 = next, -1 = previous. Entries `usable` rejects are skipped.
