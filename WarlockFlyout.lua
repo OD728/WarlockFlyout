@@ -558,14 +558,14 @@ main.warn:SetPoint("CENTER")
 main.warn:SetSize(BTN * 1.25, BTN * 1.25)
 main.warn:SetTexture(MEDIA .. "hex_glow")
 main.warn:SetBlendMode("ADD")
-main.warn:SetVertexColor(0.25, 0.8, 0.25)
+main.warn:SetVertexColor(0.2, 0.6, 0.2)
 main.warn:Hide()
 main.warn.anim = main.warn:CreateAnimationGroup()
 main.warn.anim:SetLooping("BOUNCE")
 do
     local a = main.warn.anim:CreateAnimation("Alpha")
-    a:SetFromAlpha(0.5)
-    a:SetToAlpha(0.1)
+    a:SetFromAlpha(0.2)
+    a:SetToAlpha(0.03)
     a:SetDuration(0.9)
 end
 
