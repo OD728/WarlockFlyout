@@ -555,17 +555,17 @@ main.count:SetTextColor(1, 1, 1)
 -- Optional warning: a green pulse around the button while you have no healthstone.
 main.warn = main:CreateTexture(nil, "OVERLAY", nil, 6)
 main.warn:SetPoint("CENTER")
-main.warn:SetSize(BTN * 1.35, BTN * 1.35)
+main.warn:SetSize(BTN * 1.25, BTN * 1.25)
 main.warn:SetTexture(MEDIA .. "hex_glow")
 main.warn:SetBlendMode("ADD")
-main.warn:SetVertexColor(0.3, 1, 0.3)
+main.warn:SetVertexColor(0.25, 0.8, 0.25)
 main.warn:Hide()
 main.warn.anim = main.warn:CreateAnimationGroup()
 main.warn.anim:SetLooping("BOUNCE")
 do
     local a = main.warn.anim:CreateAnimation("Alpha")
-    a:SetFromAlpha(1)
-    a:SetToAlpha(0.2)
+    a:SetFromAlpha(0.5)
+    a:SetToAlpha(0.1)
     a:SetDuration(0.9)
 end
 
