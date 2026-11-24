@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0
+
+### New
+- **Healthstone warning** (off by default): turn on "Warn when I have no healthstone" in `/wf config` and the button pulses green while you carry no healthstone. It only shows if you know Create Healthstone, and the tooltip tells you to right-click and make one. It stops as soon as you have one.
+- The new text is in English and German, and `/wf where` and `Settings.lua` include the setting.
+
 ## 1.9
 
 ### New

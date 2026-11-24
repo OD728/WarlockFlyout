@@ -21,6 +21,7 @@ local L = {
     pentagram = "Pentagram", shard = "Soul Shard",
     knowledge = "Demonic Knowledge", pact = "Demonic Pact", incinerate = "Incinerate", shadowflame = "Shadow and Flame",
     corner = "Shard badge: %s", showCount = "Show the shard number",
+    warnHealthstone = "Warn when I have no healthstone", noHealthstone = "No healthstone in your bags: right-click and create one",
     bottomright = "bottom right", bottomleft = "bottom left", topright = "top right", topleft = "top left",
     famWarlock = "Warlock", famBasic = "Basics", famClassic = "Classic", famQuality = "Quality",
     cast = "Cast bar", rested = "Rested",
@@ -36,6 +37,7 @@ if GetLocale and GetLocale() == "deDE" then
     L.pentagram, L.shard = "Pentagramm", "Seelensplitter"
     L.knowledge, L.pact, L.incinerate, L.shadowflame = "Dämonisches Wissen", "Dämonischer Pakt", "Verbrennen", "Schatten und Flamme"
     L.corner, L.showCount = "Splitter-Anzeige: %s", "Splitteranzahl anzeigen"
+    L.warnHealthstone, L.noHealthstone = "Warnen, wenn ich keinen Gesundheitsstein habe", "Kein Gesundheitsstein in den Taschen: Rechtsklick und einen herstellen"
     L.bottomright, L.bottomleft, L.topright, L.topleft = "unten rechts", "unten links", "oben rechts", "oben links"
     L.famWarlock, L.famBasic, L.famClassic, L.famQuality = "Hexenmeister", "Grundfarben", "Klassisch", "Qualität"
     L.cast, L.rested = "Zauberleiste", "Erholt"
@@ -131,7 +133,7 @@ local function Panel(f, alpha, fill, edge)
 end
 
 local DEFAULTS = { locked = false, scale = 1, dir = "up", shown = true, border = "purple", picture = "pentagram",
-    corner = "bottomright", showCount = true }
+    corner = "bottomright", showCount = true, warnHealthstone = false }
 
 local DEMONS = {
     { names = { "Summon Imp" }, id = 688, free = true },
@@ -260,6 +262,16 @@ local function ItemCount(id)
         n = ok and c
     end
     return tonumber(Readable(n)) or 0
+end
+
+-- Every healthstone item (plain and talent-improved ranks, Classic and TBC).
+local HEALTHSTONES = { 5512, 19004, 19005, 5511, 19006, 19007, 5509, 19008, 19009, 5510, 19010, 19011,
+    9421, 19012, 19013, 22103, 22104, 22105 }
+local function HasHealthstone()
+    for _, id in ipairs(HEALTHSTONES) do
+        if ItemCount(id) > 0 then return true end
+    end
+    return false
 end
 
 local book, bookList = {}, {}
@@ -540,6 +552,35 @@ main.count:SetJustifyH("CENTER")
 main.count:SetJustifyV("MIDDLE")
 main.count:SetTextColor(1, 1, 1)
 
+-- Optional warning: a green pulse around the button while you have no healthstone.
+main.warn = main:CreateTexture(nil, "OVERLAY", nil, 6)
+main.warn:SetPoint("CENTER")
+main.warn:SetSize(BTN * 1.35, BTN * 1.35)
+main.warn:SetTexture(MEDIA .. "hex_glow")
+main.warn:SetBlendMode("ADD")
+main.warn:SetVertexColor(0.3, 1, 0.3)
+main.warn:Hide()
+main.warn.anim = main.warn:CreateAnimationGroup()
+main.warn.anim:SetLooping("BOUNCE")
+do
+    local a = main.warn.anim:CreateAnimation("Alpha")
+    a:SetFromAlpha(1)
+    a:SetToAlpha(0.2)
+    a:SetDuration(0.9)
+end
+
+local function UpdateWarning()
+    local on = db.warnHealthstone == true and Addon.canMakeHealthstone and not HasHealthstone()
+    main.missingHealthstone = on and true or false
+    if on then
+        main.warn:Show()
+        main.warn.anim:Play()
+    else
+        main.warn.anim:Stop()
+        main.warn:Hide()
+    end
+end
+
 local function NewFlyout(name)
     local f = CreateFrame("Frame", name, main, "SecureHandlerBaseTemplate")
     f:SetFrameStrata("HIGH")
@@ -701,6 +742,7 @@ local function Rebuild()
     if InCombatLockdown() then pending = true return end
     pending = false
     ScanBook()
+    Addon.canMakeHealthstone = false
 
     local n, used = 0, {}
     local felDom = Find(FEL_DOMINATION)
@@ -732,6 +774,7 @@ local function Rebuild()
     for _, def in ipairs(CREATE_STONES) do
         s = FindBestRank(def)
         if s then n = n + 1 SpellButton(utils, n, s, def.hint) end
+        if s and def == CREATE_STONES[1] then Addon.canMakeHealthstone = true end
     end
     Layout(utils, n)
 end
@@ -807,6 +850,7 @@ local function Refresh()
     main.badge:SetShown(shards > 0 or not showCount)
     local shade = math.max(0, math.min(1, tonumber(ShardShade(shards, showCount)) or 0.6))
     main.badge.icon:SetVertexColor(shade, shade, shade)
+    UpdateWarning()
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do
             if b:IsShown() then
@@ -860,6 +904,7 @@ main:SetScript("OnEnter", function(self)
     GameTooltip:AddLine(("Soul shards: %d"):format(ItemCount(SOUL_SHARD)), 0.8, 0.6, 1)
     local used, total = SoulBag()
     if total > 0 then GameTooltip:AddLine(L.soulBag:format(used, total), 0.8, 0.6, 1) end
+    if main.missingHealthstone then GameTooltip:AddLine(L.noHealthstone, 0.3, 1, 0.3) end
     GameTooltip:AddLine("/wf config: settings", 0.6, 0.6, 0.6)
     GameTooltip:Show()
 end)
@@ -1011,14 +1056,18 @@ local function BuildConfig()
     countBox:SetPoint("TOPLEFT", corner, "BOTTOMLEFT", -2, -4)
     w[#w + 1] = picture
     w[#w + 1] = corner
+    local warnBox = Check(f, L.warnHealthstone, countBox, -2,
+        function() return db.warnHealthstone == true end,
+        function(v) db.warnHealthstone = v Refresh() end)
     w[#w + 1] = countBox
+    w[#w + 1] = warnBox
 
     local scaleText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleText:SetPoint("TOPLEFT", countBox, "BOTTOMLEFT", 2, -12)
+    scaleText:SetPoint("TOPLEFT", warnBox, "BOTTOMLEFT", 2, -12)
     local plus = PanelButton(f, "+", 26)
     local minus = PanelButton(f, "-", 26)
     plus:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
-    plus:SetPoint("TOP", countBox, "BOTTOM", 0, -6)
+    plus:SetPoint("TOP", warnBox, "BOTTOM", 0, -6)
     minus:SetPoint("RIGHT", plus, "LEFT", -4, 0)
     plus.label:SetJustifyH("CENTER")
     minus.label:SetJustifyH("CENTER")
@@ -1036,7 +1085,7 @@ local function BuildConfig()
     -- Border color: its own section, one row of swatches per family. Click one to
     -- use it, hover for its name; the white ring marks the current color.
     local sec = CreateFrame("Frame", nil, f)
-    sec:SetPoint("TOPLEFT", countBox, "BOTTOMLEFT", 2, -40)
+    sec:SetPoint("TOPLEFT", warnBox, "BOTTOMLEFT", 2, -40)
     sec:SetWidth(CFG_INNER)
     local secRule = sec:CreateTexture(nil, "BORDER")
     secRule:SetHeight(1)
@@ -1200,10 +1249,10 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
         local p = db.point
         Print("Paste this into Settings.lua (in the addon folder) to keep these settings:")
         local pic = type(db.picture) == "number" and tostring(db.picture) or ("%q"):format(db.picture or "pentagram")
-        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s, corner = %q, showCount = %s,"):format(
+        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s, corner = %q, showCount = %s, warnHealthstone = %s,"):format(
             p and p[1] or "CENTER", p and p[2] or "CENTER", p and p[3] or 0, p and p[4] or -180,
             db.scale or 1, db.dir, tostring(db.locked), db.border or "purple", pic,
-            db.corner or "bottomright", tostring(db.showCount ~= false)))
+            db.corner or "bottomright", tostring(db.showCount ~= false), tostring(db.warnHealthstone == true)))
     elseif cmd == "spells" then
 
         if not InCombatLockdown() then Rebuild() end
@@ -1277,6 +1326,7 @@ local function LoadSettings()
     if not known or not PictureAvailable(db.picture) then db.picture = "pentagram" end
     if not CORNERS[db.corner] then db.corner = "bottomright" end
     db.showCount = db.showCount ~= false
+    db.warnHealthstone = db.warnHealthstone == true
 end
 
 local function Init()

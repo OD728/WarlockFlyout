@@ -15,6 +15,7 @@
 --             or a spell ID such as 688 (Summon Imp)
 --   corner    = "bottomright", "bottomleft", "topleft" or "topright" (where the shard badge sits)
 --   showCount = true or false (the number on the shard badge)
+--   warnHealthstone = true or false (green pulse on the button while you have no healthstone)
 
 WarlockFlyoutSettings = {
     -- point = { "CENTER", "CENTER", 0, -180 }, scale = 1.0, dir = "up", locked = false,
