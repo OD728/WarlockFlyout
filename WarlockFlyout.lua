@@ -13,6 +13,8 @@ local GLOW = { 0.80, 0.55, 1.00 }
 
 -- Text for the newer settings, in English and German.
 local L = {
+    sacPos = "Sacrifice button: %s", auto = "automatic", top = "top", bottom = "bottom", left = "left", right = "right",
+    sacrifice = "Show the Demonic Sacrifice button", theme = "Theme: %s", themeWarlock = "Modern", themeForever = "Forever", foreverGold = "Forever gold",
     border = "Border color: %s", picture = "Button picture: %s",
     cycleHint = "Click: next. Right-click: previous.",
     soulBag = "Soul bag: %d of %d slots full",
@@ -29,6 +31,9 @@ local L = {
     openNote = "The options open in their own window (also with /wf).",
 }
 if GetLocale and GetLocale() == "deDE" then
+    L.theme, L.foreverGold = "Design: %s", "Forever-Gold"
+    L.sacrifice = "Button für Dämonisches Opfer zeigen"
+    L.sacPos, L.auto, L.top, L.bottom, L.left, L.right = "Opfer-Button: %s", "automatisch", "oben", "unten", "links", "rechts"
     L.border, L.picture = "Rahmenfarbe: %s", "Button-Bild: %s"
     L.cycleHint = "Klick: nächste. Rechtsklick: vorherige."
     L.soulBag = "Seelentasche: %d von %d Plätzen belegt"
@@ -116,24 +121,48 @@ local PICTURE_ICONS = {
 local UI_FILL = { 0.05, 0.05, 0.06 }
 local UI_EDGE = { 0.30, 0.30, 0.33 }
 
-local function Panel(f, alpha, fill, edge)
-    fill, edge = fill or FILL, edge or EDGE
+-- Themes. ACCENT, EDGE, FILL, GLOW, UI_FILL, UI_EDGE and the "purple" border color
+-- are tables that ApplyTheme rewrites in place, so everything that reads them (and
+-- everything registered with Themed) follows the chosen theme.
+--   warlock = the original purple look, forever = dark charcoal with bronze/gold edges
+local THEMES = {
+    warlock = { accent = ACCENT, edge = EDGE, fill = FILL, glow = GLOW, uiFill = { 0.05, 0.05, 0.06 },
+        uiEdge = { 0.30, 0.30, 0.33 }, ring = { 0.635, 0.345, 1.00 } },
+    forever = { shape = "circle", accent = { 0.93, 0.78, 0.30 }, edge = { 0.66, 0.52, 0.20 }, fill = { 0.06, 0.07, 0.08 },
+        glow = { 1.00, 0.86, 0.50 }, uiFill = { 0.06, 0.07, 0.08 }, uiEdge = { 0.62, 0.49, 0.20 },
+        ring = { 0.80, 0.64, 0.22 } },
+}
+local THEME_LIST = { "warlock", "forever" }
+THEMES.warlock.accent, THEMES.warlock.edge = { unpack(ACCENT) }, { unpack(EDGE) }
+THEMES.warlock.fill, THEMES.warlock.glow = { unpack(FILL) }, { unpack(GLOW) }
+
+local ROLE_TABLE = { accent = ACCENT, edge = EDGE, fill = FILL, uiFill = UI_FILL, uiEdge = UI_EDGE }
+local themed = {}
+local function Themed(obj, role, alpha)
+    themed[#themed + 1] = { obj, role, alpha or 1 }
+    local c = ROLE_TABLE[role]
+    if obj.SetColorTexture then obj:SetColorTexture(c[1], c[2], c[3], alpha or 1)
+    else obj:SetTextColor(c[1], c[2], c[3]) end
+end
+
+local function Panel(f, alpha, fillRole, edgeRole)
+    fillRole, edgeRole = fillRole or "fill", edgeRole or "edge"
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(fill[1], fill[2], fill[3], alpha or 0.92)
+    Themed(bg, fillRole, alpha or 0.92)
     local edges = { bg }
     for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" },
                          { "TOPLEFT", "BOTTOMLEFT", true }, { "TOPRIGHT", "BOTTOMRIGHT", true } }) do
         local t = f:CreateTexture(nil, "BORDER")
         t:SetPoint(e[1]); t:SetPoint(e[2])
         if e[3] then t:SetWidth(1) else t:SetHeight(1) end
-        t:SetColorTexture(edge[1], edge[2], edge[3], 1)
+        Themed(t, edgeRole)
         edges[#edges + 1] = t
     end
     return edges
 end
 
-local DEFAULTS = { locked = false, scale = 1, dir = "up", shown = true, border = "purple", picture = "pentagram",
+local DEFAULTS = { sacrifice = true, sacPos = "auto", theme = "warlock", locked = false, scale = 1, dir = "up", shown = true, border = "black", borderForever = "purple", picture = "pentagram",
     corner = "bottomright", showCount = true, warnHealthstone = false, warnShards = false }
 
 local DEMONS = {
@@ -151,6 +180,7 @@ local DEMONS = {
 
 local NOT_DEMONS = { "steed", "^summon demon$" }
 
+local DEMONIC_SACRIFICE = { names = { "Demonic Sacrifice" }, id = 18788 }
 local FEL_DOMINATION = { names = { "Fel Domination" }, id = 18708 }
 local RITUAL_OF_SUMMONING = { names = { "Ritual of Summoning" }, id = 698 }
 local CREATE_STONES = {
@@ -398,6 +428,7 @@ local function HexMask(owner, tex)
         mask:SetTexture(MEDIA .. "hex_mask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
         mask:SetAllPoints(tex)
         tex:AddMaskTexture(mask)
+        owner.mask = mask
     end)
 end
 
@@ -413,7 +444,17 @@ local function ColorOf(key)
     return BORDER_COLORS[key] or BORDER_COLORS.purple
 end
 
-local function BorderColor() return ColorOf(db.border) end
+-- Each theme remembers its own border color: Forever in db.borderForever (default
+-- "purple", which is drawn as Forever gold there), the other theme in db.border.
+local function BorderKey()
+    if db.theme == "forever" then return db.borderForever or "purple" end
+    return db.border or "black"
+end
+local function SetBorderKey(key)
+    if db.theme == "forever" then db.borderForever = key else db.border = key end
+end
+
+local function BorderColor() return ColorOf(BorderKey()) end
 
 -- Names for the swatch rows and tooltips. Game colors use the client's own words
 -- (HEALTH, MANA, ITEM_QUALITYn_DESC), so they come out in its language.
@@ -433,6 +474,7 @@ local function FamilyName(fam)
         q = L.famQuality })[fam] or fam
 end
 local function BorderName(key)
+    if key == "purple" and db.theme == "forever" then return L.foreverGold end
     if L[key] then return L[key] end
     local word = GAME_WORDS[key] and GAME_WORDS[key]()
     local fam, color = key:match("^(%a+)_(%a+)$")
@@ -445,12 +487,23 @@ end
 
 -- The hover glow: the border color, lighter. Purple keeps its original glow.
 local function GlowColor()
-    if db.border == "purple" or not db.border then return GLOW end
+    if BorderKey() == "purple" then return GLOW end
     local c = BorderColor()
     return { c[1] + (1 - c[1]) * 0.35, c[2] + (1 - c[2]) * 0.35, c[3] + (1 - c[3]) * 0.35 }
 end
 
+-- Hexagon or circle art for one face, from the theme's shape.
+local function ShapeArt(b)
+    local shape = (THEMES[db.theme] or THEMES.warlock).shape or "hex"
+    b.frameArt:SetTexture(MEDIA .. (shape == "hex" and b.hexArt or "circle_ring"))
+    b.glow:SetTexture(MEDIA .. shape .. "_glow")
+    if b.mask then b.mask:SetTexture(MEDIA .. shape .. "_mask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE") end
+    if b.cooldown then pcall(b.cooldown.SetSwipeTexture, b.cooldown, MEDIA .. shape .. "_mask") end
+    if b.pushedArt then b.pushedArt:SetTexture(MEDIA .. shape .. "_mask") end
+end
+
 local function TintFace(b)
+    ShapeArt(b)
     local c, g = BorderColor(), GlowColor()
     b.frameArt:SetVertexColor(c[1], c[2], c[3])
     b.glow:SetVertexColor(g[1], g[2], g[3])
@@ -520,6 +573,7 @@ local function HexFace(b, frameArt)
     HexMask(b, b.icon)
     b.frameArt = b:CreateTexture(nil, "OVERLAY")
     b.frameArt:SetAllPoints()
+    b.hexArt = frameArt
     b.frameArt:SetTexture(MEDIA .. frameArt)
     b.glow = b:CreateTexture(nil, "HIGHLIGHT")
     b.glow:SetAllPoints()
@@ -671,6 +725,7 @@ local function FlyoutButton(f, i)
     pushed:SetAllPoints()
     pushed:SetTexture(MEDIA .. "hex_mask")
     pushed:SetVertexColor(0, 0, 0, 0.45)
+    b.pushedArt = pushed
     pcall(b.SetPushedTexture, b, pushed)
     b:SetScript("OnEnter", ButtonTooltip)
     b:SetScript("OnLeave", GameTooltip_Hide)
@@ -689,10 +744,90 @@ local function ClearButton(b)
     b:Hide()
 end
 
+-- Demonic Sacrifice: its own small button, shown while you know the spell and have
+-- none of the four sacrifice buffs (a pet isn't required: Demonic Pact keeps it).
+local sac = CreateFrame("Button", "WarlockFlyoutSacrifice", main, "SecureActionButtonTemplate")
+sac:SetSize(SLOT + 4, SLOT + 4)
+sac:RegisterForClicks("AnyUp", "AnyDown")
+sac:SetAttribute("useOnKeyDown", false)
+HexFace(sac, "hex_border")
+sac.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+sac:SetScript("OnEnter", ButtonTooltip)
+sac:SetScript("OnLeave", GameTooltip_Hide)
+sac.hint = "Click: sacrifice your demon for the buff"
+sac:Hide()
+
+-- The four sacrifice buffs (Burning Shadow 18789, Fel Stamina 18790, Touch of Fire 18791, Fel Energy 18792):
+-- while one is up the button stays out of the way, even if a pet is still reported.
+local SAC_BUFFS = { [18789] = true, [18790] = true, [18791] = true, [18792] = true }
+local function HasSacrificeBuff()
+    -- Direct lookup by ID first: Burning Shadow, Fel Stamina, Touch of Fire, Fel Energy.
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        for id in pairs(SAC_BUFFS) do
+            local ok, a = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
+            if ok and a then return true end
+        end
+    end
+    for i = 1, 40 do
+        local id
+        if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+            local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+            if not ok or not a then break end
+            id = tonumber(Readable(a.spellId))
+        elseif UnitBuff then
+            local ok, _, _, _, _, _, _, _, _, _, sid = pcall(UnitBuff, "player", i)
+            if not ok or not sid then break end
+            id = tonumber(Readable(sid))
+        else
+            break
+        end
+        if id and SAC_BUFFS[id] then return true end
+    end
+    return false
+end
+
+-- Alpha (not Hide) so it also works in combat, where a secure frame can't be hidden.
+local function UpdateSacrificeShown()
+    local buffed = HasSacrificeBuff()
+    sac:SetAlpha(buffed and 0 or 1)
+    if not InCombatLockdown() then sac:EnableMouse(not buffed) end
+end
+
+-- Where the sacrifice button sits around the main button: { its point, main's point, x, y }.
+local SAC_LIST = { "auto", "top", "bottom", "left", "right", "topleft", "topright", "bottomleft", "bottomright" }
+local SAC_POS = {
+    top = { "BOTTOM", "TOP", 0, 6 }, bottom = { "TOP", "BOTTOM", 0, -6 },
+    left = { "RIGHT", "LEFT", -6, 0 }, right = { "LEFT", "RIGHT", 6, 0 },
+    topleft = { "BOTTOMRIGHT", "TOPLEFT", 4, -4 }, topright = { "BOTTOMLEFT", "TOPRIGHT", -4, -4 },
+    bottomleft = { "TOPRIGHT", "BOTTOMLEFT", 4, 4 }, bottomright = { "TOPLEFT", "BOTTOMRIGHT", -4, 4 },
+}
+local AUTO_OPPOSITE = { up = "bottom", down = "top", left = "right", right = "left" }
+
+local function UpdateSacrifice()
+    if InCombatLockdown() then return end
+    local spell = db.sacrifice ~= false and Find(DEMONIC_SACRIFICE)
+    if not spell then
+        sac:Hide()
+        return
+    end
+    sac:SetAttribute("type", "spell")
+    sac:SetAttribute("spell", spell.name)
+    sac.spellID, sac.label = spell.id, spell.name
+    sac.icon:SetTexture(SpellIcon(spell.id, spell.name))
+    -- "auto" = the side opposite to where the flyouts open.
+    local at = SAC_POS[db.sacPos] or SAC_POS[AUTO_OPPOSITE[db.dir] or "bottom"]
+    sac:ClearAllPoints()
+    sac:SetPoint(at[1], main, at[2], at[3], at[4])
+    sac:Show()
+    UpdateSacrificeShown()
+end
+
 -- Border color and button picture, from the settings.
 local function ApplyLook()
     TintFace(main)
     TintFace(main.badge)
+    TintFace(sac)
+    UpdateSacrifice()
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do TintFace(b) end
     end
@@ -706,6 +841,30 @@ local function ApplyLook()
     main.badge:ClearAllPoints()
     main.badge:SetPoint("CENTER", main, c[1], c[2], c[3])
     UpdateWarning()
+end
+
+local config
+
+-- Switch the look live: rewrite the shared color tables, recolor everything
+-- registered with Themed, then redo the hex tints.
+local function ApplyTheme()
+    local t = THEMES[db.theme] or THEMES.warlock
+    local function copy(dst, src) for i = 1, 3 do dst[i] = src[i] end end
+    copy(ACCENT, t.accent) copy(EDGE, t.edge) copy(FILL, t.fill) copy(GLOW, t.glow)
+    copy(UI_FILL, t.uiFill) copy(UI_EDGE, t.uiEdge) copy(BORDER_COLORS.purple, t.ring)
+    for _, e in ipairs(themed) do
+        local c = ROLE_TABLE[e[2]]
+        if e[1].SetColorTexture then e[1]:SetColorTexture(c[1], c[2], c[3], e[3])
+        else e[1]:SetTextColor(c[1], c[2], c[3]) end
+    end
+    local shape = t.shape or "hex"
+    main.warn:SetTexture(MEDIA .. shape .. "_glow")
+    main.shardGlow:SetTexture(MEDIA .. shape .. "_glow")
+    main.shardGlow:SetVertexColor(GLOW[1], GLOW[2], GLOW[3])
+    ApplyLook()
+    if config and config.widgets then
+        for _, x in ipairs(config.widgets) do if x.Refresh then x.Refresh() end end
+    end
 end
 
 -- Step through a list: dir 1 = next, -1 = previous. Entries `usable` rejects are skipped.
@@ -808,6 +967,7 @@ local function Rebuild()
         if s and def == CREATE_STONES[1] then Addon.canMakeHealthstone = true end
     end
     Layout(utils, n)
+    UpdateSacrifice()
 end
 
 -- Soul bags: shards in them and their slots in total. 0, 0 when you carry none.
@@ -883,6 +1043,7 @@ local function Refresh()
     local shade = math.max(0, math.min(1, tonumber(ShardShade(shards, showCount)) or 0.6))
     main.badge.icon:SetVertexColor(shade, shade, shade)
     UpdateWarning()
+    UpdateSacrificeShown()
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do
             if b:IsShown() then
@@ -950,7 +1111,6 @@ local function NextDir()
     return "up"
 end
 
-local config
 
 local function Check(parent, label, anchor, y, get, set)
     local c = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
@@ -978,11 +1138,11 @@ local function PanelButton(parent, text, w)
         local t = b:CreateTexture(nil, "BORDER")
         t:SetPoint(e[1]); t:SetPoint(e[2])
         if e[3] then t:SetWidth(1) else t:SetHeight(1) end
-        t:SetColorTexture(UI_EDGE[1], UI_EDGE[2], UI_EDGE[3], 1)
+        Themed(t, "uiEdge")
     end
     local hl = b:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
-    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.15)
+    Themed(hl, "accent", 0.15)
     b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     b.label:SetPoint("LEFT", 6, 0)
     b.label:SetPoint("RIGHT", -6, 0)
@@ -1003,7 +1163,7 @@ local function BuildConfig()
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
-    Panel(f, 0.95, UI_FILL, UI_EDGE)
+    Panel(f, 0.95, "uiFill", "uiEdge")
 
     local close = CreateFrame("Button", nil, f)
     close:SetSize(20, 20)
@@ -1011,7 +1171,7 @@ local function BuildConfig()
     local x = close:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     x:SetPoint("CENTER")
     x:SetText("\195\151")
-    x:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
+    Themed(x, "accent")
     close:SetScript("OnEnter", function() x:SetTextColor(1, 1, 1) end)
     close:SetScript("OnLeave", function() x:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3]) end)
     close:SetScript("OnClick", function() f:Hide() end)
@@ -1025,7 +1185,7 @@ local function BuildConfig()
     title:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD - 20, 0)
     title:SetJustifyH("LEFT")
     title:SetText("Warlock Flyout")
-    title:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
+    Themed(title, "accent")
     local sub = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
     sub:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
@@ -1035,7 +1195,7 @@ local function BuildConfig()
 
     local rule = f:CreateTexture(nil, "BORDER")
     rule:SetHeight(1)
-    rule:SetColorTexture(UI_EDGE[1], UI_EDGE[2], UI_EDGE[3], 0.8)
+    Themed(rule, "uiEdge", 0.8)
     rule:SetPoint("LEFT", f, "LEFT", CFG_PAD, 0)
     rule:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
     rule:SetPoint("TOP", logo, "BOTTOM", 0, -10)
@@ -1049,8 +1209,19 @@ local function BuildConfig()
         function() return db.shown ~= false end,
         function(v) db.shown = v ApplyLayout() end)
 
+    local theme = PanelButton(f, "")
+    theme:SetPoint("TOPLEFT", w[2], "BOTTOMLEFT", 2, -12)
+    theme:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    theme.Refresh = function() theme:SetText(L.theme:format(L["theme" .. db.theme:sub(1, 1):upper() .. db.theme:sub(2)])) end
+    theme:SetScript("OnClick", function()
+        db.theme = Cycle(THEME_LIST, db.theme, 1)
+        ApplyTheme()
+        theme.Refresh()
+    end)
+    w[#w + 1] = theme
+
     local dir = PanelButton(f, "")
-    dir:SetPoint("TOPLEFT", w[2], "BOTTOMLEFT", 2, -12)
+    dir:SetPoint("TOPLEFT", theme, "BOTTOMLEFT", 0, -6)
     dir.Refresh = function() dir:SetText("Flyouts open: " .. db.dir) end
     dir:SetScript("OnClick", function()
         if InCombatLockdown() then return end
@@ -1058,7 +1229,7 @@ local function BuildConfig()
         dir.Refresh()
         Rebuild()
     end)
-    w[3] = dir
+    w[#w + 1] = dir
 
     -- Button picture and shard badge: click for the next, right-click for the previous.
     local function CycleButton(anchor, label, list, key, nameOf, usable)
@@ -1096,14 +1267,22 @@ local function BuildConfig()
         function(v) db.warnShards = v Refresh() end)
     w[#w + 1] = countBox
     w[#w + 1] = warnBox
+    local sacBox = Check(f, L.sacrifice, shardBox, -2,
+        function() return db.sacrifice ~= false end,
+        function(v) db.sacrifice = v UpdateSacrifice() end)
+    local sacPos = CycleButton(sacBox, L.sacPos, SAC_LIST, "sacPos", function(k) return L[k] or k end)
+    sacPos:ClearAllPoints()
+    sacPos:SetPoint("TOPLEFT", sacBox, "BOTTOMLEFT", 2, -4)
     w[#w + 1] = shardBox
+    w[#w + 1] = sacBox
+    w[#w + 1] = sacPos
 
     local scaleText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleText:SetPoint("TOPLEFT", shardBox, "BOTTOMLEFT", 2, -12)
+    scaleText:SetPoint("TOPLEFT", sacPos, "BOTTOMLEFT", 0, -12)
     local plus = PanelButton(f, "+", 26)
     local minus = PanelButton(f, "-", 26)
     plus:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
-    plus:SetPoint("TOP", shardBox, "BOTTOM", 0, -6)
+    plus:SetPoint("TOP", sacPos, "BOTTOM", 0, -6)
     minus:SetPoint("RIGHT", plus, "LEFT", -4, 0)
     plus.label:SetJustifyH("CENTER")
     minus.label:SetJustifyH("CENTER")
@@ -1121,11 +1300,11 @@ local function BuildConfig()
     -- Border color: its own section, one row of swatches per family. Click one to
     -- use it, hover for its name; the white ring marks the current color.
     local sec = CreateFrame("Frame", nil, f)
-    sec:SetPoint("TOPLEFT", shardBox, "BOTTOMLEFT", 2, -40)
+    sec:SetPoint("TOPLEFT", sacPos, "BOTTOMLEFT", 0, -40)
     sec:SetWidth(CFG_INNER)
     local secRule = sec:CreateTexture(nil, "BORDER")
     secRule:SetHeight(1)
-    secRule:SetColorTexture(UI_EDGE[1], UI_EDGE[2], UI_EDGE[3], 0.8)
+    Themed(secRule, "uiEdge", 0.8)
     secRule:SetPoint("TOPLEFT")
     secRule:SetPoint("TOPRIGHT")
     -- Gold like the section headings in the other addons' windows.
@@ -1135,11 +1314,11 @@ local function BuildConfig()
     local LABEL_W = CFG_INNER - 6 * (SW_W + SW_GAP) + SW_GAP
     local swatches = {}
     local function RefreshColors()
-        head:SetText(L.border:format(BorderName(db.border)))
+        head:SetText(L.border:format(BorderName(BorderKey())))
         for _, sw in ipairs(swatches) do
             local c = ColorOf(sw.key)
             sw.fill:SetColorTexture(c[1], c[2], c[3], 1)
-            sw.ring:SetShown(sw.key == db.border)
+            sw.ring:SetShown(sw.key == BorderKey())
         end
     end
     local y = -32
@@ -1165,7 +1344,7 @@ local function BuildConfig()
             fill:SetPoint("TOPLEFT", 1, -1)
             fill:SetPoint("BOTTOMRIGHT", -1, 1)
             s:SetScript("OnClick", function()
-                db.border = key
+                SetBorderKey(key)
                 ApplyLook()
                 RefreshColors()
             end)
@@ -1273,6 +1452,9 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
     elseif cmd == "scale" and tonumber(arg) then
         db.scale = math.min(2, math.max(0.5, tonumber(arg)))
         ApplyLayout()
+    elseif cmd == "theme" and (THEMES[arg] or arg == "modern") then
+        db.theme = arg == "modern" and "warlock" or arg
+        ApplyTheme()
     elseif cmd == "dir" and VALID_DIR[arg] then
         db.dir = arg
         Rebuild()
@@ -1285,9 +1467,9 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
         local p = db.point
         Print("Paste this into Settings.lua (in the addon folder) to keep these settings:")
         local pic = type(db.picture) == "number" and tostring(db.picture) or ("%q"):format(db.picture or "pentagram")
-        Print(("point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s, corner = %q, showCount = %s, warnHealthstone = %s, warnShards = %s,"):format(
-            p and p[1] or "CENTER", p and p[2] or "CENTER", p and p[3] or 0, p and p[4] or -180,
-            db.scale or 1, db.dir, tostring(db.locked), db.border or "purple", pic,
+        Print(("theme = %q, point = { %q, %q, %d, %d }, scale = %.1f, dir = %q, locked = %s, border = %q, picture = %s, corner = %q, showCount = %s, warnHealthstone = %s, warnShards = %s,"):format(
+            db.theme or "warlock", p and p[1] or "CENTER", p and p[2] or "CENTER", p and p[3] or 0, p and p[4] or -180,
+            db.scale or 1, db.dir, tostring(db.locked), db.border or "black", pic,
             db.corner or "bottomright", tostring(db.showCount ~= false), tostring(db.warnHealthstone == true), tostring(db.warnShards == true)))
     elseif cmd == "spells" then
 
@@ -1300,11 +1482,16 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
             Print((f == demons and "Demons: " or "Utility: ") .. (#names > 0 and table.concat(names, ", ") or "none"))
         end
         Print(("Spellbook entries read: %d"):format(#bookList))
+        local sp = Find(DEMONIC_SACRIFICE)
+        Print(("Demonic Pact known: %s"):format(tostring(KnownID(425464))))
+        Print(("Demonic Sacrifice: %s, pet: %s, buff: %s"):format(sp and (sp.name .. " (" .. tostring(sp.id) .. ")") or "not found",
+            tostring(UnitExists("pet") and true or false), tostring(HasSacrificeBuff())))
     else
         Print("/wf config - the settings window")
         Print("/wf lock, /wf unlock - stop or allow moving the button" ..
             (Addon.bareLock and " (also just /lock and /unlock)" or ""))
         Print("/wf dir up||down||left||right - where the flyouts open")
+        Print("/wf theme modern||forever - the look")
         Print("/wf scale 0.5-2 - button size")
         Print("/wf show | hide - show or hide the button")
         Print("/wf reset - back to the middle of the screen")
@@ -1316,7 +1503,7 @@ end
 local events = CreateFrame("Frame")
 
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB",
-                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED" }) do
+                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "UNIT_AURA" }) do
     pcall(events.RegisterEvent, events, e)
 end
 
@@ -1354,9 +1541,11 @@ local function LoadSettings()
         for k, v in pairs(WarlockFlyoutSettings) do db[k] = v end
     end
     for k, v in pairs(DEFAULTS) do if db[k] == nil then db[k] = v end end
+    if not THEMES[db.theme] then db.theme = "warlock" end
     if not VALID_DIR[db.dir] then db.dir = "up" end
     db.scale = tonumber(db.scale) or 1
-    if not (BORDER_COLORS[db.border] or db.border == "class") then db.border = "purple" end
+    if not (BORDER_COLORS[db.border] or db.border == "class") then db.border = "black" end
+    if not (BORDER_COLORS[db.borderForever] or db.borderForever == "class") then db.borderForever = "purple" end
     local known = false
     for _, p in ipairs(PICTURE_LIST) do if p == db.picture then known = true end end
     if not known or not PictureAvailable(db.picture) then db.picture = "pentagram" end
@@ -1364,6 +1553,8 @@ local function LoadSettings()
     db.showCount = db.showCount ~= false
     db.warnHealthstone = db.warnHealthstone == true
     db.warnShards = db.warnShards == true
+    db.sacrifice = db.sacrifice ~= false
+    if db.sacPos ~= "auto" and not SAC_POS[db.sacPos] then db.sacPos = "auto" end
 end
 
 local function Init()
@@ -1372,7 +1563,7 @@ local function Init()
     local warlock, class = IsWarlock()
     if class and not warlock then main:Hide() return end
     ready = true
-    ApplyLook()
+    ApplyTheme()
     ApplyLayout()
 end
 
@@ -1400,6 +1591,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
         Addon.RegisterBareLock()
         if ready then Rebuild() end
     elseif not ready then
+        return
+    elseif event == "UNIT_AURA" then
+        if arg1 == "player" then UpdateSacrificeShown() end
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
         if pending then ApplyLayout() end

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1
+
+### New
+- **Themes**: `/wf config` has a new Theme button, **Modern** (the original hexagon look, black border by default) and **Forever** (round gold-ringed buttons and a charcoal and bronze window that fit the Forever UI, gold border by default). Each theme remembers its own border color. Switching is instant, and `/wf theme modern` or `/wf theme forever` does the same.
+- **Demonic Sacrifice button**: a small extra button shows while you know Demonic Sacrifice and have none of its four buffs (Burning Shadow, Fel Stamina, Touch of Fire, Fel Energy). Click it to sacrifice; once you have the buff the button hides until it is gone. Works in any spec that has the talent.
+- **Sacrifice button position**: pick automatic (opposite the flyouts), top, bottom, left, right or any corner. A checkbox turns the button off.
+- The new text is in English and German, and `/wf where` and `Settings.lua` include the new settings.
+
+### Changed
+- New installs start with a black border in the Modern theme. Existing settings are kept.
+
 ## 2.0
 
 ### New

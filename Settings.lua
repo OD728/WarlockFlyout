@@ -6,7 +6,8 @@
 -- with your current position, paste it in between the braces below, save
 -- this file, and /reload.
 --
---   point  = { anchor, anchor on screen, x, y }
+--   theme  = "warlock" (shown as "Modern": the original hexagon button) or "forever" (charcoal and bronze/gold)
+--   point  ={ anchor, anchor on screen, x, y }
 --   scale  = 0.5 to 2
 --   dir    = "up", "down", "left" or "right" (where the flyouts open)
 --   locked = true or false
