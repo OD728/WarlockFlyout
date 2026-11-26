@@ -13,6 +13,7 @@ local GLOW = { 0.80, 0.55, 1.00 }
 
 -- Text for the newer settings, in English and German.
 local L = {
+    armorGlow = "Glow the armor button", armor = "Show the Demon Armor button", armorPos = "Armor button: %s",
     sacPos = "Sacrifice button: %s", auto = "automatic", top = "top", bottom = "bottom", left = "left", right = "right",
     sacrifice = "Show the Demonic Sacrifice button", theme = "Theme: %s", themeWarlock = "Modern", themeForever = "Forever", foreverGold = "Forever gold",
     border = "Border color: %s", picture = "Button picture: %s",
@@ -33,6 +34,8 @@ local L = {
 if GetLocale and GetLocale() == "deDE" then
     L.theme, L.foreverGold = "Design: %s", "Forever-Gold"
     L.sacrifice = "Button für Dämonisches Opfer zeigen"
+    L.armorGlow = "Rüstungs-Button leuchten lassen"
+    L.armor, L.armorPos = "Button für Dämonenrüstung zeigen", "Rüstungs-Button: %s"
     L.sacPos, L.auto, L.top, L.bottom, L.left, L.right = "Opfer-Button: %s", "automatisch", "oben", "unten", "links", "rechts"
     L.border, L.picture = "Rahmenfarbe: %s", "Button-Bild: %s"
     L.cycleHint = "Klick: nächste. Rechtsklick: vorherige."
@@ -162,7 +165,7 @@ local function Panel(f, alpha, fillRole, edgeRole)
     return edges
 end
 
-local DEFAULTS = { sacrifice = true, sacPos = "auto", theme = "warlock", locked = false, scale = 1, dir = "up", shown = true, border = "black", borderForever = "purple", picture = "pentagram",
+local DEFAULTS = { armorGlow = true, armor = true, armorPos = "auto", sacrifice = true, sacPos = "auto", theme = "warlock", locked = false, scale = 1, dir = "up", shown = true, border = "black", borderForever = "purple", picture = "pentagram",
     corner = "bottomright", showCount = true, warnHealthstone = false, warnShards = false }
 
 local DEMONS = {
@@ -760,10 +763,10 @@ sac:Hide()
 -- The four sacrifice buffs (Burning Shadow 18789, Fel Stamina 18790, Touch of Fire 18791, Fel Energy 18792):
 -- while one is up the button stays out of the way, even if a pet is still reported.
 local SAC_BUFFS = { [18789] = true, [18790] = true, [18791] = true, [18792] = true }
-local function HasSacrificeBuff()
-    -- Direct lookup by ID first: Burning Shadow, Fel Stamina, Touch of Fire, Fel Energy.
+local function HasAura(set)
+    -- Direct lookup by ID first, then a scan of the buff list.
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
-        for id in pairs(SAC_BUFFS) do
+        for id in pairs(set) do
             local ok, a = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
             if ok and a then return true end
         end
@@ -781,10 +784,11 @@ local function HasSacrificeBuff()
         else
             break
         end
-        if id and SAC_BUFFS[id] then return true end
+        if id and set[id] then return true end
     end
     return false
 end
+local function HasSacrificeBuff() return HasAura(SAC_BUFFS) end
 
 -- Alpha (not Hide) so it also works in combat, where a secure frame can't be hidden.
 local function UpdateSacrificeShown()
@@ -822,12 +826,80 @@ local function UpdateSacrifice()
     UpdateSacrificeShown()
 end
 
+-- Demon Skin / Demon Armor: a second small button while you know the spell and
+-- carry none of its ranks (or Fel Armor). Click to cast your best rank.
+local DEMON_ARMOR = { prefix = "^demon [sa]", name = "Demon Armor",
+    ids = { 11735, 11734, 11733, 1086, 706, 696, 687 } }
+local ARMOR_BUFFS = { [687] = true, [696] = true, [706] = true, [1086] = true, [11733] = true,
+    [11734] = true, [11735] = true, [27260] = true, [28176] = true, [28189] = true }
+local AUTO_ARMOR = { up = "left", down = "left", left = "top", right = "top" }
+
+local armor = CreateFrame("Button", "WarlockFlyoutArmor", main, "SecureActionButtonTemplate")
+armor:SetSize(SLOT + 4, SLOT + 4)
+armor:RegisterForClicks("AnyUp", "AnyDown")
+armor:SetAttribute("useOnKeyDown", false)
+HexFace(armor, "hex_border")
+armor.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+armor:SetScript("OnEnter", ButtonTooltip)
+armor:SetScript("OnLeave", GameTooltip_Hide)
+armor.hint = "Click: cast your armor"
+armor:Hide()
+
+-- A pulsing glow around the button, so a missing armor is easy to spot.
+armor.pulse = armor:CreateTexture(nil, "OVERLAY", nil, 6)
+armor.pulse:SetPoint("CENTER")
+armor.pulse:SetSize((SLOT + 4) * 1.35, (SLOT + 4) * 1.35)
+armor.pulse:SetTexture(MEDIA .. "hex_glow")
+armor.pulse:SetBlendMode("ADD")
+armor.pulse:SetVertexColor(1.0, 0.85, 0.35)
+armor.pulse.anim = armor.pulse:CreateAnimationGroup()
+armor.pulse.anim:SetLooping("BOUNCE")
+do
+    local a = armor.pulse.anim:CreateAnimation("Alpha")
+    a:SetFromAlpha(0.45)
+    a:SetToAlpha(0.08)
+    a:SetDuration(0.9)
+end
+
+local function UpdateArmorShown()
+    local buffed = HasAura(ARMOR_BUFFS)
+    armor:SetAlpha(buffed and 0 or 1)
+    if db.armorGlow ~= false then
+        armor.pulse:Show()
+        if not armor.pulse.anim:IsPlaying() then armor.pulse.anim:Play() end
+    else
+        armor.pulse.anim:Stop()
+        armor.pulse:Hide()
+    end
+    if not InCombatLockdown() then armor:EnableMouse(not buffed) end
+end
+
+local function UpdateArmor()
+    if InCombatLockdown() then return end
+    local spell = db.armor ~= false and FindBestRank(DEMON_ARMOR)
+    if not spell then
+        armor:Hide()
+        return
+    end
+    armor:SetAttribute("type", "spell")
+    armor:SetAttribute("spell", spell.name)
+    armor.spellID, armor.label = spell.id, spell.name
+    armor.icon:SetTexture(SpellIcon(spell.id, spell.name))
+    local at = SAC_POS[db.armorPos] or SAC_POS[AUTO_ARMOR[db.dir] or "left"]
+    armor:ClearAllPoints()
+    armor:SetPoint(at[1], main, at[2], at[3], at[4])
+    armor:Show()
+    UpdateArmorShown()
+end
+
 -- Border color and button picture, from the settings.
 local function ApplyLook()
     TintFace(main)
     TintFace(main.badge)
     TintFace(sac)
+    TintFace(armor)
     UpdateSacrifice()
+    UpdateArmor()
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do TintFace(b) end
     end
@@ -860,6 +932,7 @@ local function ApplyTheme()
     local shape = t.shape or "hex"
     main.warn:SetTexture(MEDIA .. shape .. "_glow")
     main.shardGlow:SetTexture(MEDIA .. shape .. "_glow")
+    if armor and armor.pulse then armor.pulse:SetTexture(MEDIA .. shape .. "_glow") end
     main.shardGlow:SetVertexColor(GLOW[1], GLOW[2], GLOW[3])
     ApplyLook()
     if config and config.widgets then
@@ -968,6 +1041,7 @@ local function Rebuild()
     end
     Layout(utils, n)
     UpdateSacrifice()
+    UpdateArmor()
 end
 
 -- Soul bags: shards in them and their slots in total. 0, 0 when you carry none.
@@ -1044,6 +1118,7 @@ local function Refresh()
     main.badge.icon:SetVertexColor(shade, shade, shade)
     UpdateWarning()
     UpdateSacrificeShown()
+    UpdateArmorShown()
     for _, f in ipairs({ demons, utils }) do
         for _, b in ipairs(f.buttons) do
             if b:IsShown() then
@@ -1124,8 +1199,9 @@ local function Check(parent, label, anchor, y, get, set)
     return c
 end
 
-local CFG_W, CFG_PAD = 320, 16
-local CFG_INNER = CFG_W - 2 * CFG_PAD
+-- Two columns: the options on the left, the border colors on the right.
+local CFG_PAD, CFG_INNER, CFG_GAP = 16, 288, 24
+local CFG_W = 2 * CFG_INNER + 2 * CFG_PAD + CFG_GAP
 
 local function PanelButton(parent, text, w)
     local b = CreateFrame("Button", nil, parent)
@@ -1273,16 +1349,32 @@ local function BuildConfig()
     local sacPos = CycleButton(sacBox, L.sacPos, SAC_LIST, "sacPos", function(k) return L[k] or k end)
     sacPos:ClearAllPoints()
     sacPos:SetPoint("TOPLEFT", sacBox, "BOTTOMLEFT", 2, -4)
+    local armorBox = Check(f, L.armor, sacPos, -4,
+        function() return db.armor ~= false end,
+        function(v) db.armor = v UpdateArmor() end)
+    armorBox:ClearAllPoints()
+    armorBox:SetPoint("TOPLEFT", sacPos, "BOTTOMLEFT", -2, -4)
+    local armorPos = CycleButton(armorBox, L.armorPos, SAC_LIST, "armorPos", function(k) return L[k] or k end)
+    armorPos:ClearAllPoints()
+    armorPos:SetPoint("TOPLEFT", armorBox, "BOTTOMLEFT", 2, -4)
+    local glowBox = Check(f, L.armorGlow, armorPos, -4,
+        function() return db.armorGlow ~= false end,
+        function(v) db.armorGlow = v UpdateArmor() end)
+    glowBox:ClearAllPoints()
+    glowBox:SetPoint("TOPLEFT", armorPos, "BOTTOMLEFT", -2, -4)
+    w[#w + 1] = glowBox
     w[#w + 1] = shardBox
     w[#w + 1] = sacBox
     w[#w + 1] = sacPos
+    w[#w + 1] = armorBox
+    w[#w + 1] = armorPos
 
     local scaleText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleText:SetPoint("TOPLEFT", sacPos, "BOTTOMLEFT", 0, -12)
+    scaleText:SetPoint("TOPLEFT", glowBox, "BOTTOMLEFT", 2, -12)
     local plus = PanelButton(f, "+", 26)
     local minus = PanelButton(f, "-", 26)
-    plus:SetPoint("RIGHT", f, "RIGHT", -CFG_PAD, 0)
-    plus:SetPoint("TOP", sacPos, "BOTTOM", 0, -6)
+    plus:SetPoint("RIGHT", theme, "RIGHT", 0, 0)
+    plus:SetPoint("TOP", glowBox, "BOTTOM", 0, -6)
     minus:SetPoint("RIGHT", plus, "LEFT", -4, 0)
     plus.label:SetJustifyH("CENTER")
     minus.label:SetJustifyH("CENTER")
@@ -1300,7 +1392,7 @@ local function BuildConfig()
     -- Border color: its own section, one row of swatches per family. Click one to
     -- use it, hover for its name; the white ring marks the current color.
     local sec = CreateFrame("Frame", nil, f)
-    sec:SetPoint("TOPLEFT", sacPos, "BOTTOMLEFT", 0, -40)
+    sec:SetPoint("TOPLEFT", theme, "TOPRIGHT", CFG_GAP, 0)
     sec:SetWidth(CFG_INNER)
     local secRule = sec:CreateTexture(nil, "BORDER")
     secRule:SetHeight(1)
@@ -1380,6 +1472,8 @@ local function BuildConfig()
 
     local function FitHeight()
         local top, bottom = f:GetTop(), note:GetBottom()
+        local left = scaleText:GetBottom()
+        if bottom and left and left < bottom then bottom = left end
         if top and bottom then f:SetHeight(math.ceil(top - bottom + CFG_PAD)) end
     end
 
@@ -1483,6 +1577,8 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
         end
         Print(("Spellbook entries read: %d"):format(#bookList))
         local sp = Find(DEMONIC_SACRIFICE)
+        local ar = FindBestRank(DEMON_ARMOR)
+        Print(("Demon Armor: %s, buff: %s"):format(ar and (ar.name .. " (" .. tostring(ar.id) .. ")") or "not found", tostring(HasAura(ARMOR_BUFFS))))
         Print(("Demonic Pact known: %s"):format(tostring(KnownID(425464))))
         Print(("Demonic Sacrifice: %s, pet: %s, buff: %s"):format(sp and (sp.name .. " (" .. tostring(sp.id) .. ")") or "not found",
             tostring(UnitExists("pet") and true or false), tostring(HasSacrificeBuff())))
@@ -1554,6 +1650,9 @@ local function LoadSettings()
     db.warnHealthstone = db.warnHealthstone == true
     db.warnShards = db.warnShards == true
     db.sacrifice = db.sacrifice ~= false
+    db.armor = db.armor ~= false
+    db.armorGlow = db.armorGlow ~= false
+    if db.armorPos ~= "auto" and not SAC_POS[db.armorPos] then db.armorPos = "auto" end
     if db.sacPos ~= "auto" and not SAC_POS[db.sacPos] then db.sacPos = "auto" end
 end
 
@@ -1593,7 +1692,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
     elseif not ready then
         return
     elseif event == "UNIT_AURA" then
-        if arg1 == "player" then UpdateSacrificeShown() end
+        if arg1 == "player" then UpdateSacrificeShown() UpdateArmorShown() end
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
         if pending then ApplyLayout() end

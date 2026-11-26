@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2
+
+### New
+- **Demon Skin / Demon Armor button**: a small extra button shows while you know the spell and have none of its ranks (or Fel Armor) as a buff. Click it to cast your best rank; Demon Skin turns into Demon Armor on its own at level 20. It hides while the buff is up and comes back when it falls off, also in combat. Pick its position (automatic, any side or corner) or turn it off.
+- **Armor glow** (on by default): a soft pulsing glow around the armor button so a missing armor is easy to spot. Can be turned off in `/wf config`.
+- `/wf spells` now also prints the armor rank it found and whether the buff is up.
+- The new text is in English and German.
+
+### Changed
+- The settings window is now two columns: the options on the left, the border colors on the right. It is wider and a lot shorter.
+
 ## 2.1
 
 ### New
