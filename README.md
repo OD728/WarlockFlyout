@@ -13,11 +13,9 @@ In `/wf config` you can pick a border color and a button picture (the pentagram,
 
 ![The demon flyout in game](art/screenshot.png)
 
-![Settings window with the warning options and the border color menu](art/settings-colors.png)
+![Settings window: options on the left, border colors on the right](art/settings-colors.png)
 
 ![Modern theme](art/theme-modern.png) ![Forever theme](art/theme-forever.png)
-
-![Forever settings window](art/settings-forever.png)
 
 ![Tooltip with soul shards and soul bag fill](art/tooltip.png)
 
