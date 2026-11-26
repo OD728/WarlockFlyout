@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.1
+
+### Fixed
+- The Demonic Sacrifice and Demon Armor buttons no longer pop up in combat while you still have the buff. The game hides buff data in combat, so the buttons now keep their state from before the fight. A spell you cast yourself hides its button at once, and losing a buff you had before the fight brings the button back right away.
+
 ## 2.2
 
 ### New

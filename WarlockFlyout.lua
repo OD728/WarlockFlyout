@@ -763,20 +763,25 @@ sac:Hide()
 -- The four sacrifice buffs (Burning Shadow 18789, Fel Stamina 18790, Touch of Fire 18791, Fel Energy 18792):
 -- while one is up the button stays out of the way, even if a pet is still reported.
 local SAC_BUFFS = { [18789] = true, [18790] = true, [18791] = true, [18792] = true }
+-- Aura instance IDs of the buffs seen while out of combat, so losing one in combat
+-- (the game tells us which instance was removed) brings its button back.
+local armorAura, sacAura
+
 local function HasAura(set)
     -- Direct lookup by ID first, then a scan of the buff list.
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for id in pairs(set) do
             local ok, a = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
-            if ok and a then return true end
+            if ok and a then return true, a.auraInstanceID end
         end
     end
     for i = 1, 40 do
-        local id
+        local id, auraInstance
         if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
             local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
             if not ok or not a then break end
             id = tonumber(Readable(a.spellId))
+            auraInstance = a.auraInstanceID
         elseif UnitBuff then
             local ok, _, _, _, _, _, _, _, _, _, sid = pcall(UnitBuff, "player", i)
             if not ok or not sid then break end
@@ -784,15 +789,19 @@ local function HasAura(set)
         else
             break
         end
-        if id and set[id] then return true end
+        if id and set[id] then return true, auraInstance end
     end
     return false
 end
 local function HasSacrificeBuff() return HasAura(SAC_BUFFS) end
 
 -- Alpha (not Hide) so it also works in combat, where a secure frame can't be hidden.
+-- In combat the game hides aura data from addons, so the state from before the
+-- fight is kept; a cast we see ourselves (UNIT_SPELLCAST_SUCCEEDED) still hides it.
 local function UpdateSacrificeShown()
-    local buffed = HasSacrificeBuff()
+    if InCombatLockdown() then return end
+    local buffed, inst = HasSacrificeBuff()
+    sacAura = inst
     sac:SetAlpha(buffed and 0 or 1)
     if not InCombatLockdown() then sac:EnableMouse(not buffed) end
 end
@@ -862,7 +871,9 @@ do
 end
 
 local function UpdateArmorShown()
-    local buffed = HasAura(ARMOR_BUFFS)
+    if InCombatLockdown() then return end
+    local buffed, inst = HasAura(ARMOR_BUFFS)
+    armorAura = inst
     armor:SetAlpha(buffed and 0 or 1)
     if db.armorGlow ~= false then
         armor.pulse:Show()
@@ -1599,7 +1610,7 @@ end
 local events = CreateFrame("Frame")
 
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB",
-                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "UNIT_AURA" }) do
+                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "UNIT_AURA", "UNIT_SPELLCAST_SUCCEEDED" }) do
     pcall(events.RegisterEvent, events, e)
 end
 
@@ -1678,7 +1689,7 @@ local function QueueRebuild()
     if C_Timer and C_Timer.After then C_Timer.After(0.2, run) else run() end
 end
 
-events:SetScript("OnEvent", function(_, event, arg1)
+events:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     if event == "ADDON_LOADED" then
         if arg1 == addonName then
             LoadSettings()
@@ -1691,8 +1702,34 @@ events:SetScript("OnEvent", function(_, event, arg1)
         if ready then Rebuild() end
     elseif not ready then
         return
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        local id = tonumber(Readable(arg3))
+        if arg1 == "player" and id then
+            if ARMOR_BUFFS[id] then armor:SetAlpha(0) end
+            if id == 18788 then sac:SetAlpha(0) end
+        end
+        return
     elseif event == "UNIT_AURA" then
-        if arg1 == "player" then UpdateSacrificeShown() UpdateArmorShown() end
+        if arg1 == "player" then
+            -- In combat the update's contents can be secret: read only what we may.
+            local info = Readable(arg2)
+            if type(info) == "table" then
+                local added, removed = Readable(info.addedAuras), Readable(info.removedAuraInstanceIDs)
+                pcall(function()
+                    for _, a in ipairs(type(added) == "table" and added or {}) do
+                        local id = tonumber(Readable(a.spellId))
+                        if id and ARMOR_BUFFS[id] then armorAura = Readable(a.auraInstanceID) end
+                        if id and SAC_BUFFS[id] then sacAura = Readable(a.auraInstanceID) end
+                    end
+                    for _, inst in ipairs(type(removed) == "table" and removed or {}) do
+                        inst = Readable(inst)
+                        if inst and armorAura and inst == armorAura then armorAura = nil armor:SetAlpha(1) end
+                        if inst and sacAura and inst == sacAura then sacAura = nil sac:SetAlpha(1) end
+                    end
+                end)
+            end
+            UpdateSacrificeShown() UpdateArmorShown()
+        end
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
         if pending then ApplyLayout() end
