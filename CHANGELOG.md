@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.3
+
+### Fixed
+- The Demon Armor and Demonic Sacrifice buttons no longer pop up in a fight while the buff is still on. The game hides buffs from addons in combat (and the whole time in battlegrounds and arenas), so the buttons now keep their last state there and are checked again when the fight ends. Casting the spell still hides its button at once, and dying brings them back.
+
+### New
+- The armor button is now one reminder slot for everything you're missing, so it takes no extra room: Demon Armor first, then Soul Link (talent known, demon out), then your weapon stone (a Spellstone or Firestone in your bags but none on your weapon; click to put it on).
+- New options: "Remind me of Soul Link", "Remind me of my weapon stone" and "No reminders in inns and cities".
+- `/wf spells` also reports Soul Link and your weapon stone.
+
 ## 2.2.1
 
 ### Fixed

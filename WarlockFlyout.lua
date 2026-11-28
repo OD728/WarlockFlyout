@@ -13,7 +13,9 @@ local GLOW = { 0.80, 0.55, 1.00 }
 
 -- Text for the newer settings, in English and German.
 local L = {
-    armorGlow = "Glow the armor button", armor = "Show the Demon Armor button", armorPos = "Armor button: %s",
+    armorGlow = "Glow the reminder button", armor = "Remind me of Demon Armor", armorPos = "Reminder button: %s",
+    soulLink = "Remind me of Soul Link", weaponStone = "Remind me of my weapon stone", muteResting = "No reminders in inns and cities",
+    castArmor = "Click: cast your armor", castLink = "Click: cast Soul Link", useStone = "Click: put the stone on your weapon",
     sacPos = "Sacrifice button: %s", auto = "automatic", top = "top", bottom = "bottom", left = "left", right = "right",
     sacrifice = "Show the Demonic Sacrifice button", theme = "Theme: %s", themeWarlock = "Modern", themeForever = "Forever", foreverGold = "Forever gold",
     border = "Border color: %s", picture = "Button picture: %s",
@@ -34,8 +36,11 @@ local L = {
 if GetLocale and GetLocale() == "deDE" then
     L.theme, L.foreverGold = "Design: %s", "Forever-Gold"
     L.sacrifice = "Button für Dämonisches Opfer zeigen"
-    L.armorGlow = "Rüstungs-Button leuchten lassen"
-    L.armor, L.armorPos = "Button für Dämonenrüstung zeigen", "Rüstungs-Button: %s"
+    L.armorGlow = "Erinnerungs-Button leuchten lassen"
+    L.armor, L.armorPos = "An Dämonenrüstung erinnern", "Erinnerungs-Button: %s"
+    L.soulLink, L.weaponStone = "An Seelenverbindung erinnern", "An meinen Waffenstein erinnern"
+    L.muteResting = "Keine Erinnerungen in Gasthäusern und Städten"
+    L.castArmor, L.castLink, L.useStone = "Klick: Rüstung wirken", "Klick: Seelenverbindung wirken", "Klick: Stein auf die Waffe legen"
     L.sacPos, L.auto, L.top, L.bottom, L.left, L.right = "Opfer-Button: %s", "automatisch", "oben", "unten", "links", "rechts"
     L.border, L.picture = "Rahmenfarbe: %s", "Button-Bild: %s"
     L.cycleHint = "Klick: nächste. Rechtsklick: vorherige."
@@ -165,7 +170,7 @@ local function Panel(f, alpha, fillRole, edgeRole)
     return edges
 end
 
-local DEFAULTS = { armorGlow = true, armor = true, armorPos = "auto", sacrifice = true, sacPos = "auto", theme = "warlock", locked = false, scale = 1, dir = "up", shown = true, border = "black", borderForever = "purple", picture = "pentagram",
+local DEFAULTS = { armorGlow = true, armor = true, soulLink = true, weaponStone = true, muteResting = false, armorPos = "auto", sacrifice = true, sacPos = "auto", theme = "warlock", locked = false, scale = 1, dir = "up", shown = true, border = "black", borderForever = "purple", picture = "pentagram",
     corner = "bottomright", showCount = true, warnHealthstone = false, warnShards = false }
 
 local DEMONS = {
@@ -763,34 +768,43 @@ sac:Hide()
 -- The four sacrifice buffs (Burning Shadow 18789, Fel Stamina 18790, Touch of Fire 18791, Fel Energy 18792):
 -- while one is up the button stays out of the way, even if a pet is still reported.
 local SAC_BUFFS = { [18789] = true, [18790] = true, [18791] = true, [18792] = true }
--- Aura instance IDs of the buffs seen while out of combat, so losing one in combat
--- (the game tells us which instance was removed) brings its button back.
+-- Aura instance IDs of the buffs seen while out of combat.
 local armorAura, sacAura
 
+-- true: one of the buffs is on you. false: none (every buff could be read).
+-- nil: the game hid some of your buffs (in a fight, or the whole time in a
+-- battleground or arena), so we can't tell: the caller keeps what it last saw.
 local function HasAura(set)
+    local hidden = false
     -- Direct lookup by ID first, then a scan of the buff list.
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
         for id in pairs(set) do
             local ok, a = pcall(C_UnitAuras.GetPlayerAuraBySpellID, id)
-            if ok and a then return true, a.auraInstanceID end
+            if not ok then hidden = true
+            elseif a then return true, Readable(a.auraInstanceID) end
         end
     end
     for i = 1, 40 do
-        local id, auraInstance
+        local id
         if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
             local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
-            if not ok or not a then break end
+            if not ok then hidden = true break end
+            if not a then break end
             id = tonumber(Readable(a.spellId))
-            auraInstance = a.auraInstanceID
+            if not id then hidden = true end
+            if id and set[id] then return true, Readable(a.auraInstanceID) end
         elseif UnitBuff then
             local ok, _, _, _, _, _, _, _, _, _, sid = pcall(UnitBuff, "player", i)
-            if not ok or not sid then break end
+            if not ok then hidden = true break end
+            if not sid then break end
             id = tonumber(Readable(sid))
+            if not id then hidden = true end
+            if id and set[id] then return true end
         else
             break
         end
-        if id and set[id] then return true, auraInstance end
     end
+    if hidden then return nil end
     return false
 end
 local function HasSacrificeBuff() return HasAura(SAC_BUFFS) end
@@ -801,9 +815,11 @@ local function HasSacrificeBuff() return HasAura(SAC_BUFFS) end
 local function UpdateSacrificeShown()
     if InCombatLockdown() then return end
     local buffed, inst = HasSacrificeBuff()
+    if buffed == nil then return end -- buffs hidden: keep what we last saw
     sacAura = inst
-    sac:SetAlpha(buffed and 0 or 1)
-    if not InCombatLockdown() then sac:EnableMouse(not buffed) end
+    local off = buffed or (db.muteResting and IsResting and IsResting())
+    sac:SetAlpha(off and 0 or 1)
+    sac:EnableMouse(not off)
 end
 
 -- Where the sacrifice button sits around the main button: { its point, main's point, x, y }.
@@ -851,7 +867,7 @@ HexFace(armor, "hex_border")
 armor.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 armor:SetScript("OnEnter", ButtonTooltip)
 armor:SetScript("OnLeave", GameTooltip_Hide)
-armor.hint = "Click: cast your armor"
+armor.hint = L.castArmor
 armor:Hide()
 
 -- A pulsing glow around the button, so a missing armor is easy to spot.
@@ -870,11 +886,163 @@ do
     a:SetDuration(0.9)
 end
 
+-- The reminder slot (this button) shows the first thing you're missing:
+-- your armor, then Soul Link (talent known, demon out), then your weapon stone
+-- (a Spellstone or Firestone in your bags but none on your weapon). One slot
+-- for all three, so they take no extra room next to the main button.
+local SOUL_LINK_ID = 19028
+local SOUL_LINK_BUFFS = { [19028] = true, [25228] = true }
+-- Weapon stones, best rank last: the items, what they put on your weapon
+-- (enchant IDs), and the spell the item casts when used.
+local WEAPON_STONES = {
+    { items = { 5522, 13602, 13603 }, enchants = { [8059] = true, [8060] = true, [8061] = true },
+      uses = { [1237152] = true, [1237156] = true, [1237159] = true } },
+    { items = { 1254, 13699, 13700, 13701 }, enchants = { [1803] = true, [1823] = true, [1824] = true, [1825] = true },
+      uses = { [758] = true, [17945] = true, [17947] = true, [17949] = true } },
+}
+local STONE_USES = {}
+for _, st in ipairs(WEAPON_STONES) do for id in pairs(st.uses) do STONE_USES[id] = true end end
+
+local function ItemIcon(id)
+    for _, fn in ipairs({ C_Item and C_Item.GetItemIconByID or false, GetItemIcon or false }) do
+        if type(fn) == "function" then
+            local ok, t = pcall(fn, id)
+            if ok and t then return t end
+        end
+    end
+end
+
+local function ItemName(id)
+    for _, fn in ipairs({ C_Item and C_Item.GetItemNameByID or false, GetItemInfo or false }) do
+        if type(fn) == "function" then
+            local ok, n = pcall(fn, id)
+            if ok and n then return Readable(n) end
+        end
+    end
+end
+
+-- The best weapon stone in your bags, or nil.
+local function StoneInBags()
+    for _, st in ipairs(WEAPON_STONES) do
+        for i = #st.items, 1, -1 do
+            if ItemCount(st.items[i]) > 0 then return st.items[i] end
+        end
+    end
+end
+
+-- Enchants on your weapons: { id, icon } for main and off hand.
+local function WeaponEnchants()
+    local list, readable = {}, false
+    if C_Item and C_Item.GetWeaponEnchantInfo then
+        for _, slot in ipairs({ Enum and Enum.WeaponSlot and Enum.WeaponSlot.MainHand or 0,
+                                Enum and Enum.WeaponSlot and Enum.WeaponSlot.OffHand or 1 }) do
+            local ok, info = pcall(C_Item.GetWeaponEnchantInfo, slot)
+            if ok and type(Readable(info)) == "table" then
+                readable = true
+                pcall(function()
+                    for _, e in ipairs(info) do
+                        if type(e) == "table" and Readable(e.hasEnchant) then
+                            list[#list + 1] = { id = tonumber(Readable(e.enchantID)), icon = Readable(e.enchantIconID) }
+                        end
+                    end
+                end)
+            end
+        end
+    end
+    if not readable and GetWeaponEnchantInfo then
+        local ok, hasMain, _, _, mainID, hasOff, _, _, offID = pcall(GetWeaponEnchantInfo)
+        -- Forever's old function can answer false with a stone on: only trust a yes.
+        if ok and (Readable(hasMain) or Readable(hasOff)) then
+            readable = true
+            if Readable(hasMain) then list[#list + 1] = { id = tonumber(Readable(mainID)) } end
+            if Readable(hasOff) then list[#list + 1] = { id = tonumber(Readable(offID)) } end
+        end
+    end
+    return readable and list or nil
+end
+
+-- Right after you use a stone, the next enchant on your weapon is that stone's
+-- (remembered in WarlockFlyoutDB, for stones this list doesn't know yet).
+local learnStoneUntil = 0
+
+-- true: a weapon stone is on. false: none. nil: can't tell.
+local function StoneOnWeapon()
+    local list = WeaponEnchants()
+    if not list then return nil end
+    local icons = {}
+    for _, st in ipairs(WEAPON_STONES) do
+        for _, item in ipairs(st.items) do
+            local t = ItemIcon(item)
+            if t then icons[t] = true end
+        end
+    end
+    db.stoneEnchants = type(db.stoneEnchants) == "table" and db.stoneEnchants or {}
+    for _, e in ipairs(list) do
+        if e.id and db.stoneEnchants[e.id] then return true end
+        for _, st in ipairs(WEAPON_STONES) do
+            if e.id and st.enchants[e.id] then return true end
+        end
+        if (e.icon and icons[e.icon]) or GetTime() < learnStoneUntil then
+            if e.id then db.stoneEnchants[e.id] = true end
+            return true
+        end
+    end
+    return false
+end
+
+local function SoulLinkKnown()
+    return KnownID(SOUL_LINK_ID) or KnownID(25228)
+end
+
+-- What's missing first: "armor", "link" or "stone" (with the stone's item ID),
+-- false when nothing is, nil when the game hides what we'd need to know.
+local function ReminderNeed()
+    local unsure = false
+    if armor.armorSpell then
+        local on = HasAura(ARMOR_BUFFS)
+        if on == false then return "armor" elseif on == nil then unsure = true end
+    end
+    if db.soulLink ~= false and UnitExists("pet") and SoulLinkKnown() then
+        local on = HasAura(SOUL_LINK_BUFFS)
+        if on == false then return "link" elseif on == nil then unsure = true end
+    end
+    local item = db.weaponStone ~= false and StoneInBags()
+    if item then
+        local on = StoneOnWeapon()
+        if on == false then return "stone", item elseif on == nil then unsure = true end
+    end
+    if unsure then return nil end
+    return false
+end
+
+-- Point the slot at what's missing (out of combat only: it's a secure button).
+local function SetReminder(kind, item)
+    armor.kind = kind
+    armor:SetAttribute("macrotext", nil)
+    armor:SetAttribute("spell", nil)
+    if kind == "link" then
+        local name = SpellName(SOUL_LINK_ID) or "Soul Link"
+        armor:SetAttribute("type", "spell")
+        armor:SetAttribute("spell", name)
+        armor.spellID, armor.label, armor.hint = SOUL_LINK_ID, name, L.castLink
+        armor.icon:SetTexture(SpellIcon(SOUL_LINK_ID, name))
+    elseif kind == "stone" then
+        local name = ItemName(item)
+        armor:SetAttribute("type", "macro")
+        armor:SetAttribute("macrotext", "/use item:" .. item .. "\n/use 16")
+        armor.spellID, armor.label, armor.hint = nil, name or "Weapon stone", L.useStone
+        armor.icon:SetTexture(ItemIcon(item) or "Interface\\Icons\\INV_Misc_Gem_Sapphire_01")
+    elseif armor.armorSpell then
+        local spell = armor.armorSpell
+        armor:SetAttribute("type", "spell")
+        armor:SetAttribute("spell", spell.name)
+        armor.spellID, armor.label, armor.hint = spell.id, spell.name, L.castArmor
+        armor.icon:SetTexture(SpellIcon(spell.id, spell.name))
+    end
+end
+
 local function UpdateArmorShown()
     if InCombatLockdown() then return end
-    local buffed, inst = HasAura(ARMOR_BUFFS)
-    armorAura = inst
-    armor:SetAlpha(buffed and 0 or 1)
     if db.armorGlow ~= false then
         armor.pulse:Show()
         if not armor.pulse.anim:IsPlaying() then armor.pulse.anim:Play() end
@@ -882,23 +1050,25 @@ local function UpdateArmorShown()
         armor.pulse.anim:Stop()
         armor.pulse:Hide()
     end
-    if not InCombatLockdown() then armor:EnableMouse(not buffed) end
+    local kind, item = ReminderNeed()
+    if kind == nil then return end -- buffs hidden: keep what we last saw
+    if kind then SetReminder(kind, item) else armor.kind = nil end
+    local off = not kind or (db.muteResting and IsResting and IsResting())
+    armor:SetAlpha(off and 0 or 1)
+    armor:EnableMouse(not off)
 end
 
 local function UpdateArmor()
     if InCombatLockdown() then return end
-    local spell = db.armor ~= false and FindBestRank(DEMON_ARMOR)
-    if not spell then
+    armor.armorSpell = db.armor ~= false and FindBestRank(DEMON_ARMOR) or nil
+    if not (armor.armorSpell or (db.soulLink ~= false and SoulLinkKnown()) or db.weaponStone ~= false) then
         armor:Hide()
         return
     end
-    armor:SetAttribute("type", "spell")
-    armor:SetAttribute("spell", spell.name)
-    armor.spellID, armor.label = spell.id, spell.name
-    armor.icon:SetTexture(SpellIcon(spell.id, spell.name))
     local at = SAC_POS[db.armorPos] or SAC_POS[AUTO_ARMOR[db.dir] or "left"]
     armor:ClearAllPoints()
     armor:SetPoint(at[1], main, at[2], at[3], at[4])
+    if not armor.kind then armor:SetAlpha(0) end -- nothing to show until we know
     armor:Show()
     UpdateArmorShown()
 end
@@ -1373,7 +1543,19 @@ local function BuildConfig()
         function(v) db.armorGlow = v UpdateArmor() end)
     glowBox:ClearAllPoints()
     glowBox:SetPoint("TOPLEFT", armorPos, "BOTTOMLEFT", -2, -4)
+    local linkBox = Check(f, L.soulLink, glowBox, -2,
+        function() return db.soulLink ~= false end,
+        function(v) db.soulLink = v UpdateArmor() end)
+    local stoneBox = Check(f, L.weaponStone, linkBox, -2,
+        function() return db.weaponStone ~= false end,
+        function(v) db.weaponStone = v UpdateArmor() end)
+    local muteBox = Check(f, L.muteResting, stoneBox, -2,
+        function() return db.muteResting == true end,
+        function(v) db.muteResting = v UpdateSacrificeShown() UpdateArmor() end)
     w[#w + 1] = glowBox
+    w[#w + 1] = linkBox
+    w[#w + 1] = stoneBox
+    w[#w + 1] = muteBox
     w[#w + 1] = shardBox
     w[#w + 1] = sacBox
     w[#w + 1] = sacPos
@@ -1381,11 +1563,11 @@ local function BuildConfig()
     w[#w + 1] = armorPos
 
     local scaleText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    scaleText:SetPoint("TOPLEFT", glowBox, "BOTTOMLEFT", 2, -12)
+    scaleText:SetPoint("TOPLEFT", muteBox, "BOTTOMLEFT", 2, -12)
     local plus = PanelButton(f, "+", 26)
     local minus = PanelButton(f, "-", 26)
     plus:SetPoint("RIGHT", theme, "RIGHT", 0, 0)
-    plus:SetPoint("TOP", glowBox, "BOTTOM", 0, -6)
+    plus:SetPoint("TOP", muteBox, "BOTTOM", 0, -6)
     minus:SetPoint("RIGHT", plus, "LEFT", -4, 0)
     plus.label:SetJustifyH("CENTER")
     minus.label:SetJustifyH("CENTER")
@@ -1591,6 +1773,11 @@ SlashCmdList.WARLOCKFLYOUT = function(msg)
         local ar = FindBestRank(DEMON_ARMOR)
         Print(("Demon Armor: %s, buff: %s"):format(ar and (ar.name .. " (" .. tostring(ar.id) .. ")") or "not found", tostring(HasAura(ARMOR_BUFFS))))
         Print(("Demonic Pact known: %s"):format(tostring(KnownID(425464))))
+        local ench = {}
+        for _, e in ipairs(WeaponEnchants() or {}) do ench[#ench + 1] = tostring(e.id) .. "/" .. tostring(e.icon) end
+        Print(("Soul Link known: %s. Weapon stone in bags: %s, on weapon: %s, weapon enchants: %s"):format(
+            tostring(SoulLinkKnown()), tostring(StoneInBags()), tostring(StoneOnWeapon()),
+            WeaponEnchants() and (#ench > 0 and table.concat(ench, ", ") or "none") or "unreadable"))
         Print(("Demonic Sacrifice: %s, pet: %s, buff: %s"):format(sp and (sp.name .. " (" .. tostring(sp.id) .. ")") or "not found",
             tostring(UnitExists("pet") and true or false), tostring(HasSacrificeBuff())))
     else
@@ -1610,7 +1797,8 @@ end
 local events = CreateFrame("Frame")
 
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "SPELLS_CHANGED", "LEARNED_SPELL_IN_TAB",
-                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "UNIT_AURA", "UNIT_SPELLCAST_SUCCEEDED" }) do
+                     "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED", "UNIT_AURA", "UNIT_SPELLCAST_SUCCEEDED", "PLAYER_DEAD",
+                     "UNIT_PET", "UNIT_INVENTORY_CHANGED", "PLAYER_UPDATE_RESTING" }) do
     pcall(events.RegisterEvent, events, e)
 end
 
@@ -1663,6 +1851,9 @@ local function LoadSettings()
     db.sacrifice = db.sacrifice ~= false
     db.armor = db.armor ~= false
     db.armorGlow = db.armorGlow ~= false
+    db.soulLink = db.soulLink ~= false
+    db.weaponStone = db.weaponStone ~= false
+    db.muteResting = db.muteResting == true
     if db.armorPos ~= "auto" and not SAC_POS[db.armorPos] then db.armorPos = "auto" end
     if db.sacPos ~= "auto" and not SAC_POS[db.sacPos] then db.sacPos = "auto" end
 end
@@ -1705,29 +1896,32 @@ events:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local id = tonumber(Readable(arg3))
         if arg1 == "player" and id then
-            if ARMOR_BUFFS[id] then armor:SetAlpha(0) end
+            if STONE_USES[id] then learnStoneUntil = GetTime() + 5 end
+            if (armor.kind == "armor" and ARMOR_BUFFS[id]) or (armor.kind == "link" and SOUL_LINK_BUFFS[id])
+                or (armor.kind == "stone" and STONE_USES[id]) then armor:SetAlpha(0) end
             if id == 18788 then sac:SetAlpha(0) end
+        end
+        return
+    elseif event == "UNIT_PET" or event == "UNIT_INVENTORY_CHANGED" or event == "PLAYER_UPDATE_RESTING" then
+        if event == "PLAYER_UPDATE_RESTING" or arg1 == "player" then
+            UpdateSacrificeShown() UpdateArmorShown()
+        end
+        return
+    elseif event == "PLAYER_DEAD" then
+        -- Dying takes your armor and sacrifice buff with it, even where the game hides buffs.
+        armorAura, sacAura = nil, nil
+        sac:SetAlpha(1)
+        if not InCombatLockdown() then
+            sac:EnableMouse(true)
+            if armor.armorSpell then SetReminder("armor") armor:SetAlpha(1) armor:EnableMouse(true) end
         end
         return
     elseif event == "UNIT_AURA" then
         if arg1 == "player" then
-            -- In combat the update's contents can be secret: read only what we may.
-            local info = Readable(arg2)
-            if type(info) == "table" then
-                local added, removed = Readable(info.addedAuras), Readable(info.removedAuraInstanceIDs)
-                pcall(function()
-                    for _, a in ipairs(type(added) == "table" and added or {}) do
-                        local id = tonumber(Readable(a.spellId))
-                        if id and ARMOR_BUFFS[id] then armorAura = Readable(a.auraInstanceID) end
-                        if id and SAC_BUFFS[id] then sacAura = Readable(a.auraInstanceID) end
-                    end
-                    for _, inst in ipairs(type(removed) == "table" and removed or {}) do
-                        inst = Readable(inst)
-                        if inst and armorAura and inst == armorAura then armorAura = nil armor:SetAlpha(1) end
-                        if inst and sacAura and inst == sacAura then sacAura = nil sac:SetAlpha(1) end
-                    end
-                end)
-            end
+            -- Out of combat: a fresh look at the buffs. In combat nothing brings the
+            -- buttons back: the game hides aura data there, so a refreshed buff
+            -- (old instance removed, new one unreadable) looked like a lost one.
+            -- They are checked again as soon as the fight ends (PLAYER_REGEN_ENABLED).
             UpdateSacrificeShown() UpdateArmorShown()
         end
         return
@@ -1743,3 +1937,10 @@ events:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
 end)
 
 if IsLoggedIn and IsLoggedIn() then Init() if ready then Refresh() end end
+
+-- A weapon stone wears off without an event we can count on: look again now and then.
+if C_Timer and C_Timer.NewTicker then
+    C_Timer.NewTicker(15, function()
+        if ready and not InCombatLockdown() then UpdateArmorShown() end
+    end)
+end
